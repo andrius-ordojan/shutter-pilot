@@ -49,31 +49,44 @@ func main() {
 		log.Fatalf("Error reading directory: %v", err)
 	}
 
-	videoStructure := make(map[int][]string)
+	// TODO: change to structs
+	videoStructure := make(map[string]map[string][]string)
 	for _, file := range files {
-		if !file.IsDir() {
-			fullPath := filepath.Join(*sourcedir, file.Name())
-			fmt.Printf("Processing file: %s\n", fullPath)
-
-			file, err := os.Open(fullPath)
-			if err != nil {
-				fmt.Println("Error opening file:", err)
-				return
-			}
-
-			created, err := getVideoCreationTimeMetadata(file)
-			file.Close()
-			if err != nil {
-				fmt.Println(err.Error())
-				return
-			}
-			year := created.Year()
-			// strconv.Itoa(created.Year())
-			videoStructure[year] = append(videoStructure[year], fullPath)
+		if file.IsDir() {
+			continue // Skip directories
 		}
+
+		fullPath := filepath.Join(*sourcedir, file.Name())
+		fmt.Printf("Processing file: %s\n", fullPath)
+
+		file, err := os.Open(fullPath)
+		if err != nil {
+			fmt.Println("Error opening file:", err)
+			continue
+		}
+		defer file.Close()
+
+		created, err := getVideoCreationTimeMetadata(file)
+		if err != nil {
+			fmt.Println(err.Error())
+			continue
+		}
+
+		year := strconv.Itoa(created.Year())
+		month := fmt.Sprintf("%02d", int(created.Month()))
+		day := fmt.Sprintf("%02d", created.Day())
+		date := fmt.Sprintf("%s-%s-%s", year, month, day)
+
+		if _, exists := videoStructure[year]; !exists {
+			videoStructure[year] = make(map[string][]string)
+		}
+
+		videoStructure[year][date] = append(videoStructure[year][date], fullPath)
 	}
 
 	fmt.Println(videoStructure)
+
+	// TODO: create year folder if doesn't exist, create folders for days and move files over
 
 	return
 	file, err := os.Open(os.Args[1])
