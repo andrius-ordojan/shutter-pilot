@@ -30,10 +30,10 @@ func main() {
 	flag.Parse()
 
 	if *sourcedir == "" {
-		log.Fatal("Error: sourcedir is required")
+		log.Fatal("Error: --sourcedir is required")
 	}
 	if *destdir == "" {
-		log.Fatal("Error: destdir is required")
+		log.Fatal("Error: --destdir is required")
 	}
 
 	if _, err := os.Stat(*sourcedir); os.IsNotExist(err) {
@@ -49,7 +49,6 @@ func main() {
 		log.Fatalf("Error reading directory: %v", err)
 	}
 
-	// TODO: change to structs
 	videoStructure := make(map[string]map[string][]string)
 	for _, file := range files {
 		if file.IsDir() {
@@ -84,25 +83,39 @@ func main() {
 		videoStructure[year][date] = append(videoStructure[year][date], fullPath)
 	}
 
-	fmt.Println(videoStructure)
+	for year := range videoStructure {
+		yearPath := filepath.Join(*destdir, year)
 
-	// TODO: create year folder if doesn't exist, create folders for days and move files over
+		fmt.Println("Year:", yearPath)
+		if _, err := os.Stat(yearPath); os.IsNotExist(err) {
+			err := os.MkdirAll(yearPath, os.ModePerm)
+			if err != nil {
+				log.Fatalf("Error creating directory: %v", err)
+			}
+		}
 
-	return
-	file, err := os.Open(os.Args[1])
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
+		for date := range videoStructure[year] {
+			datePath := filepath.Join(yearPath, date)
+			fmt.Println("  Date:", datePath)
+
+			if _, err := os.Stat(datePath); os.IsNotExist(err) {
+				err := os.MkdirAll(datePath, os.ModePerm)
+				if err != nil {
+					log.Fatalf("Error creating directory: %v", err)
+				}
+			}
+
+			for _, filePath := range videoStructure[year][date] {
+				destPath := filepath.Join(datePath, filepath.Base(filePath))
+				fmt.Printf("    Moving file from %s to %s\n", filePath, destPath)
+
+				err := os.Rename(filePath, destPath)
+				if err != nil {
+					log.Fatalf("    Error moving file: %v", err)
+				}
+			}
+		}
 	}
-	defer file.Close()
-
-	created, err := getVideoCreationTimeMetadata(file)
-	if err != nil {
-		fmt.Println(err.Error())
-		return
-	}
-
-	fmt.Printf("Movie created at (%s)\n", strconv.Itoa(created.Year()))
 }
 
 func getVideoCreationTimeMetadata(videoBuffer io.ReadSeeker) (time.Time, error) {
