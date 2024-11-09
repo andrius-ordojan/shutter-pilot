@@ -2,6 +2,20 @@
 
 Program to organize media files. I like the structure that Lighroom uses when I import my photos and wanted a similar solution for when I'm on the go or backing up content out of the camera. This allows me to dump my photos and videos into an ingestion folder, then run the tool to read the metadata and organize media into folders based on the creation date and move them to the final destination.
 
+The file structure looks like This
+
+- <DESTINATION>
+  - `photos` 
+    - year ex. `2024`
+      - full ISO date ex. `2024-11-10`
+        - `raf` files go here. File names are preserved.
+        - `sooc`
+          - 'jpg' files are saved here
+  - `videos`
+    - year
+      - full ISO date
+        - file with original name
+
 ## installation
 
 Grab a binary from the releases.
