@@ -1,2 +1,5 @@
 build:
-	go build  -o ./dist/ ./cmd/videoorganizer/
+	go build -o ./dist/mediaarrangelr .
+
+run:
+	go run .
