@@ -5,12 +5,12 @@ Program to organize media files. I like the structure that Lighroom uses when I 
 The file structure looks like This
 
 - DESTINATION that was listed in the cli argument
-  - `photos` 
+  - `photos`
     - year ex. `2024`
       - full ISO date ex. `2024-11-10`
         - `raf` files go here. File names are preserved.
         - `sooc`
-          - 'jpg' files are saved here
+          - 'jpg' files are saved here with original name
   - `videos`
     - year
       - full ISO date
