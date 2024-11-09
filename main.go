@@ -271,6 +271,7 @@ func main() {
 	var args args
 	arg.MustParse(&args)
 
+	// TODO: handle duplicates by not overriding them
 	processFilesInDirectory(args.Source, args.Destination, args.DryRun)
 
 	// TODO: clean up source dir if it's empty of content
