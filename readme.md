@@ -1,3 +1,15 @@
-# video-organizer
+# media-arrange-lr
 
-Little program to organize my video files. I wanted to keep the structure similar to what Lightroom does to my photos, but for videos. This allows me to dump my videos into an ingestion folder, then read the metadata to organize them into folders based on the creation date and move them to the final destination.
+Program to organize media files. I like the structure that Lighroom uses when I import my photos and wanted a similar solution for when I'm on the go or backing up content out of the camera. This allows me to dump my photos and videos into an ingestion folder, then run the tool to read the metadata and organize media into folders based on the creation date and move them to the final destination.
+
+## installation
+
+Grab a binary from the releases.
+
+## usage
+
+```
+mediaarrangelr [--dryrun] SOURCE DESTINATION
+```
+
+Setting `dryrun` will not run any changes on the file system.
