@@ -10,7 +10,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -36,8 +35,18 @@ const (
 	OneGB = 1024 * OneMB
 )
 
+type args struct {
+	Source      string `arg:"positional,required" help:"source directory for media"`
+	Destination string `arg:"positional,required" help:"destination directory for orginised media"`
+	DryRun      bool   `arg:"-d,--dryrun" default:"false" help:"does not modify file system"`
+}
+
+func (args) Description() string {
+	return "Orginizes photo and video media into lightroom style directory structure"
+}
+
 type Media interface {
-	GetFilePath() string
+	GetPath() string
 	GetFingerprint() string
 	SetFingerprint(fingerprint string)
 	GetMediaType() MediaType
@@ -45,12 +54,12 @@ type Media interface {
 }
 
 type Mov struct {
-	FilePath    string
+	Path        string
 	Fingerprint string
 }
 
-func (m *Mov) GetFilePath() string {
-	return m.FilePath
+func (m *Mov) GetPath() string {
+	return m.Path
 }
 
 func (m *Mov) GetFingerprint() string {
@@ -66,7 +75,7 @@ func (m *Mov) GetMediaType() MediaType {
 }
 
 func (m *Mov) ReadCreationTime() (time.Time, error) {
-	file, err := os.Open(m.FilePath)
+	file, err := os.Open(m.Path)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -117,12 +126,12 @@ func (m *Mov) ReadCreationTime() (time.Time, error) {
 }
 
 type Jpg struct {
-	FilePath    string
+	Path        string
 	Fingerprint string
 }
 
-func (j *Jpg) GetFilePath() string {
-	return j.FilePath
+func (j *Jpg) GetPath() string {
+	return j.Path
 }
 
 func (j *Jpg) GetFingerprint() string {
@@ -138,7 +147,7 @@ func (j *Jpg) GetMediaType() MediaType {
 }
 
 func (j *Jpg) ReadCreationTime() (time.Time, error) {
-	f, err := os.Open(j.FilePath)
+	f, err := os.Open(j.Path)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -158,7 +167,7 @@ func (j *Jpg) ReadCreationTime() (time.Time, error) {
 }
 
 type Raf struct {
-	FilePath    string
+	Path        string
 	Fingerprint string
 
 	Header struct {
@@ -187,8 +196,8 @@ type Raf struct {
 	Exif *exif.Exif
 }
 
-func (r *Raf) GetFilePath() string {
-	return r.FilePath
+func (r *Raf) GetPath() string {
+	return r.Path
 }
 
 func (r *Raf) GetFingerprint() string {
@@ -204,7 +213,7 @@ func (r *Raf) GetMediaType() MediaType {
 }
 
 func (r *Raf) ReadCreationTime() (time.Time, error) {
-	f, err := os.Open(r.FilePath)
+	f, err := os.Open(r.Path)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -296,10 +305,9 @@ func partialHash(filePath string) (string, error) {
 	return fmt.Sprintf("%x", hasher.Sum(nil)), nil
 }
 
-func scanFiles(dirPath string) {
-	// TODO:
-	// Instead of just logging, generate a structured "plan" with actions (copy, skip, error).
-	// For example, return a slice of structs like []Action{} where Action includes details for each operation.
+func scanFiles(dirPath string) ([]Media, error) {
+	var results []Media
+
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -310,161 +318,189 @@ func scanFiles(dirPath string) {
 		}
 
 		ext := strings.ToLower(filepath.Ext(path))
+		var media Media
+
 		switch ext {
 		case ".jpg":
-			jpg := &Jpg{FilePath: path}
-
-			hash, err := partialHash(path)
-			if err != nil {
-				log.Fatalf("error calculating partial hash: %v", err)
-			}
-
-			jpg.FingerPrint = hash
+			media = &Jpg{Path: path}
 		case ".raf":
-			raf := &Raf{FilePath: path}
-
-			hash, err := partialHash(path)
-			if err != nil {
-				log.Fatalf("error calculating partial hash: %v", err)
-			}
-
-			raf.FingerPrint = hash
+			media = &Raf{Path: path}
 		case ".mov":
-			mov := &Mov{FilePath: path}
+			media = &Mov{Path: path}
 
-			hash, err := partialHash(path)
-			if err != nil {
-				log.Fatalf("error calculating partial hash: %v", err)
-			}
-
-			mov.FingerPrint = hash
 		default:
-			log.Fatalf("unsupported file: %s\n", path)
+			return fmt.Errorf("unsupported file: %s", path)
 		}
+
+		hash, err := partialHash(path)
+		if err != nil {
+			return fmt.Errorf("error calculating partial hash for %s: %w", path, err)
+		}
+
+		media.SetFingerprint(hash)
+		results = append(results, media)
 
 		return nil
 	})
 	if err != nil {
-		log.Fatalf("Error reading directory: %v", err)
+		return nil, err
+	}
+
+	return results, nil
+}
+
+func createPlan(source, destination []Media) {
+	sourceMap := make(map[string]Media)
+	destMap := make(map[string]Media)
+
+	for _, media := range source {
+		sourceMap[media.GetFingerprint()] = media
+	}
+
+	for _, media := range destination {
+		destMap[media.GetFingerprint()] = media
+	}
+
+	for hash, srcMedia := range sourceMap {
+		if destMedia, exists := destMap[hash]; exists {
+			// File exists in both source and destination
+			// skipping action. enum probably
+			fmt.Printf("File exists in destination: %s (source: %s)\n", destMedia.GetPath(), srcMedia.GetPath())
+		} else {
+			// File is new and should be copied
+			// copy action, enum, point to source media all computation and folder strucutre will be done later
+			fmt.Printf("File to copy: %s\n", srcMedia.GetPath())
+		}
+		// create report summery of how many things are happening like in terraform
 	}
 }
 
-func processFilesInDirectory(SourceDir string, destinationDir string, dryRun bool) {
-	err := filepath.Walk(SourceDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if info.IsDir() {
-			return nil
-		}
-
-		ext := strings.ToLower(filepath.Ext(path))
-		switch ext {
-		case ".jpg":
-			jpg := &Jpg{FilePath: path}
-
-			exif, err := jpg.ReadExif()
-			if err != nil {
-				log.Fatal(err)
-			}
-			fmt.Println(exif)
-
-			dateTime, err := exif.DateTime()
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			mediaHome := createMediaDir(destinationDir, Photos, dateTime, "sooc", dryRun)
-			destPath := filepath.Join(mediaHome, filepath.Base(path))
-			movefile(path, destPath, dryRun)
-		case ".raf":
-			raf := &Raf{FilePath: path}
-
-			exif, err := raf.ReadExif()
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			dateTime, err := exif.DateTime()
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			mediaHome := createMediaDir(destinationDir, Photos, dateTime, "", dryRun)
-			destPath := filepath.Join(mediaHome, filepath.Base(path))
-			movefile(path, destPath, dryRun)
-		case ".mov":
-			mov := &Mov{FilePath: path}
-
-			creationTime, err := mov.ReadCreationTime()
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			mediaHome := createMediaDir(destinationDir, Videos, creationTime, "", dryRun)
-			destPath := filepath.Join(mediaHome, filepath.Base(path))
-			movefile(path, destPath, dryRun)
-		default:
-			log.Fatalf("unsupported file: %s\n", path)
-		}
-
-		return nil
-	})
-	if err != nil {
-		log.Fatalf("Error reading directory: %v", err)
-	}
-}
-
-func createMediaDir(destinationDir string, mediaType MediaType, dateTime time.Time, subPath string, dryRun bool) string {
-	date := dateTime.Format("2006-01-02")
-	year := strconv.Itoa(dateTime.Year())
-	path := filepath.Join(destinationDir, string(mediaType), year, date, subPath)
-
-	if dryRun {
-		fmt.Printf("creating directory: %s", path)
-	} else {
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			err := os.MkdirAll(path, os.ModePerm)
-			if err != nil {
-				log.Fatalf("Error creating directory: %v", err)
-			}
-		}
-	}
-
-	return path
-}
-
-func movefile(source string, destination string, dryRun bool) {
-	if dryRun {
-		fmt.Printf("moving %s to %s", source, destination)
-	} else {
-		err := os.Rename(source, destination)
-		if err != nil {
-			log.Fatalf("error moving file: %v", err)
-		}
-	}
-}
-
-type args struct {
-	Source      string `arg:"positional,required" help:"source directory for media"`
-	Destination string `arg:"positional,required" help:"destination directory for orginised media"`
-	DryRun      bool   `arg:"-d,--dryrun" default:"false" help:"does not modify file system"`
-}
-
-func (args) Description() string {
-	return "Orginizes photo and video media into lightroom style directory structure"
-}
+//
+// func processFilesInDirectory(SourceDir string, destinationDir string, dryRun bool) {
+// 	err := filepath.Walk(SourceDir, func(path string, info os.FileInfo, err error) error {
+// 		if err != nil {
+// 			return err
+// 		}
+//
+// 		if info.IsDir() {
+// 			return nil
+// 		}
+//
+// 		ext := strings.ToLower(filepath.Ext(path))
+// 		switch ext {
+// 		case ".jpg":
+// 			jpg := &Jpg{Path: path}
+//
+// 			exif, err := jpg.ReadExif()
+// 			if err != nil {
+// 				log.Fatal(err)
+// 			}
+// 			fmt.Println(exif)
+//
+// 			dateTime, err := exif.DateTime()
+// 			if err != nil {
+// 				log.Fatal(err)
+// 			}
+//
+// 			mediaHome := createMediaDir(destinationDir, Photos, dateTime, "sooc", dryRun)
+// 			destPath := filepath.Join(mediaHome, filepath.Base(path))
+// 			movefile(path, destPath, dryRun)
+// 		case ".raf":
+// 			raf := &Raf{Path: path}
+//
+// 			exif, err := raf.ReadExif()
+// 			if err != nil {
+// 				log.Fatal(err)
+// 			}
+//
+// 			dateTime, err := exif.DateTime()
+// 			if err != nil {
+// 				log.Fatal(err)
+// 			}
+//
+// 			mediaHome := createMediaDir(destinationDir, Photos, dateTime, "", dryRun)
+// 			destPath := filepath.Join(mediaHome, filepath.Base(path))
+// 			movefile(path, destPath, dryRun)
+// 		case ".mov":
+// 			mov := &Mov{Path: path}
+//
+// 			creationTime, err := mov.ReadCreationTime()
+// 			if err != nil {
+// 				log.Fatal(err)
+// 			}
+//
+// 			mediaHome := createMediaDir(destinationDir, Videos, creationTime, "", dryRun)
+// 			destPath := filepath.Join(mediaHome, filepath.Base(path))
+// 			movefile(path, destPath, dryRun)
+// 		default:
+// 			log.Fatalf("unsupported file: %s\n", path)
+// 		}
+//
+// 		return nil
+// 	})
+// 	if err != nil {
+// 		log.Fatalf("Error reading directory: %v", err)
+// 	}
+// }
+//
+// func createMediaDir(destinationDir string, mediaType MediaType, dateTime time.Time, subPath string, dryRun bool) string {
+// 	date := dateTime.Format("2006-01-02")
+// 	year := strconv.Itoa(dateTime.Year())
+// 	path := filepath.Join(destinationDir, string(mediaType), year, date, subPath)
+//
+// 	if dryRun {
+// 		fmt.Printf("creating directory: %s", path)
+// 	} else {
+// 		if _, err := os.Stat(path); os.IsNotExist(err) {
+// 			err := os.MkdirAll(path, os.ModePerm)
+// 			if err != nil {
+// 				log.Fatalf("Error creating directory: %v", err)
+// 			}
+// 		}
+// 	}
+//
+// 	return path
+// }
+//
+// func movefile(source string, destination string, dryRun bool) {
+// 	if dryRun {
+// 		fmt.Printf("moving %s to %s", source, destination)
+// 	} else {
+// 		err := os.Rename(source, destination)
+// 		if err != nil {
+// 			log.Fatalf("error moving file: %v", err)
+// 		}
+// 	}
+// }
 
 func main() {
 	var args args
 	arg.MustParse(&args)
 
-	processFilesInDirectory(args.Source, args.Destination, args.DryRun)
-}
+	sourceMedia, err := scanFiles(args.Source)
+	if err != nil {
+		log.Fatalf("error occured while scanning source directory: %s", err)
+	}
 
-// TODO: figjure out a way to identify images and videos uniqly
-//
+	destinationMedia, err := scanFiles(args.Destination)
+	if err != nil {
+		log.Fatalf("error occured while scanning destination directory: %s", err)
+	}
+
+	// TODO:
+	// Instead of just logging, generate a structured "plan" with actions (copy, skip, error).
+	// For example, return a slice of structs like []Action{} where Action includes details for each operation.
+	// should I pass around pointers for actions to point to media variable? or just assign it normally?
+
+	// TODO: add action type
+	// copy
+	// skip, already exists
+	// print report with summery at the end with number of files to copy and skip
+	createPlan(sourceMedia, destinationMedia)
+
+	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
+	// BUG: _embeded jpg gets created next to raf files. don't do that
+}
 
 // TODO: create plan before making changes making sure there are no conflicts and create a report with changes this will be either --plan or --dry-run
 // TODO: never overwrite existing files
@@ -492,3 +528,7 @@ func main() {
 // Execute Plan:
 //
 //     Perform the copy/move operations.
+//
+//
+//
+//
