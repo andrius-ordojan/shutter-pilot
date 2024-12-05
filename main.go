@@ -10,6 +10,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,11 +18,17 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-type MediaType string
+type (
+	MediaType  string
+	ActionType string
+)
 
 const (
 	Photos MediaType = "photos"
 	Videos MediaType = "videos"
+
+	ActionCopy ActionType = "copy"
+	ActionSkip ActionType = "skip"
 
 	appleEpochAdjustment = 2082844800
 
@@ -43,6 +50,97 @@ type args struct {
 
 func (args) Description() string {
 	return "Orginizes photo and video media into lightroom style directory structure"
+}
+
+type Action struct {
+	Type        ActionType
+	Source      Media
+	Destination Media
+}
+
+func (a *Action) Execute() error {
+	switch a.Type {
+	case ActionCopy:
+		// mediaHome := createMediaDir(destinationDir, Videos, creationTime, "", dryRun)
+
+		creationTime, err := a.Source.ReadCreationTime()
+		if err != nil {
+			return err
+		}
+
+		// TODO: how to get desitination dir?
+		date := creationTime.Format("2006-01-02")
+		year := strconv.Itoa(creationTime.Year())
+		path := filepath.Join(destinationDir, string(mediaType), year, date, subPath)
+
+		if dryRun {
+			fmt.Printf("creating directory: %s", path)
+		} else {
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				err := os.MkdirAll(path, os.ModePerm)
+				if err != nil {
+					log.Fatalf("Error creating directory: %v", err)
+				}
+			}
+		}
+
+		return path
+		destPath := filepath.Join(mediaHome, filepath.Base(path))
+		movefile(path, destPath, dryRun)
+
+		fmt.Printf("  Copying from %s to destination\n", a.Source.GetPath())
+	case ActionSkip:
+		fmt.Printf("  Skipping %s\n", a.Source.GetPath())
+	default:
+		return fmt.Errorf("unknown action type: %s", a.Type)
+	}
+	return nil
+}
+
+type Plan struct {
+	Actions []Action
+}
+
+func (p *Plan) AddAction(action Action) {
+	p.Actions = append(p.Actions, action)
+}
+
+func (p *Plan) Apply() error {
+	fmt.Println("Applying plan:")
+
+	for _, action := range p.Actions {
+		err := action.Execute()
+		if err != nil {
+			return fmt.Errorf("error while executing action: %w", err)
+		}
+	}
+
+	fmt.Printf("\n")
+	return nil
+}
+
+func (p *Plan) PrintSummary() {
+	copyCount := 0
+	skipCount := 0
+
+	fmt.Println("Detailed Actions:")
+	for _, action := range p.Actions {
+		switch action.Type {
+		case ActionCopy:
+			fmt.Printf("  Copy: %s\n", action.Source.GetPath())
+			copyCount++
+		case ActionSkip:
+			fmt.Printf("  Skip: %s (already exists at %s)\n", action.Source.GetPath(), action.Destination.GetPath())
+			skipCount++
+		}
+	}
+	fmt.Printf("\n")
+
+	fmt.Printf("Plan Summary:\n")
+	fmt.Printf("  Files to copy: %d\n", copyCount)
+	fmt.Printf("  Files skipped: %d\n", skipCount)
+
+	fmt.Printf("\n")
 }
 
 type Media interface {
@@ -349,7 +447,7 @@ func scanFiles(dirPath string) ([]Media, error) {
 	return results, nil
 }
 
-func createPlan(source, destination []Media) {
+func createPlan(source, destination []Media) Plan {
 	sourceMap := make(map[string]Media)
 	destMap := make(map[string]Media)
 
@@ -361,18 +459,26 @@ func createPlan(source, destination []Media) {
 		destMap[media.GetFingerprint()] = media
 	}
 
+	plan := Plan{}
+
 	for hash, srcMedia := range sourceMap {
 		if destMedia, exists := destMap[hash]; exists {
-			// File exists in both source and destination
-			// skipping action. enum probably
-			fmt.Printf("File exists in destination: %s (source: %s)\n", destMedia.GetPath(), srcMedia.GetPath())
+			plan.AddAction(Action{
+				Type:        ActionSkip,
+				Source:      srcMedia,
+				Destination: destMedia,
+			})
 		} else {
-			// File is new and should be copied
-			// copy action, enum, point to source media all computation and folder strucutre will be done later
-			fmt.Printf("File to copy: %s\n", srcMedia.GetPath())
+			plan.AddAction(Action{
+				Type:   ActionCopy,
+				Source: srcMedia,
+			})
 		}
-		// create report summery of how many things are happening like in terraform
 	}
+
+	plan.PrintSummary()
+
+	return plan
 }
 
 //
@@ -487,16 +593,9 @@ func main() {
 		log.Fatalf("error occured while scanning destination directory: %s", err)
 	}
 
-	// TODO:
-	// Instead of just logging, generate a structured "plan" with actions (copy, skip, error).
-	// For example, return a slice of structs like []Action{} where Action includes details for each operation.
-	// should I pass around pointers for actions to point to media variable? or just assign it normally?
+	plan := createPlan(sourceMedia, destinationMedia)
 
-	// TODO: add action type
-	// copy
-	// skip, already exists
-	// print report with summery at the end with number of files to copy and skip
-	createPlan(sourceMedia, destinationMedia)
+	// TODO:  handle dryrun
 
 	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
 	// BUG: _embeded jpg gets created next to raf files. don't do that
