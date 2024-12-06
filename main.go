@@ -27,7 +27,7 @@ const (
 	Photos MediaType = "photos"
 	Videos MediaType = "videos"
 
-	ActionCopy ActionType = "copy"
+	ActionMove ActionType = "move"
 	ActionSkip ActionType = "skip"
 
 	appleEpochAdjustment = 2082844800
@@ -53,42 +53,38 @@ func (args) Description() string {
 }
 
 type Action struct {
-	Type        ActionType
-	Source      Media
-	Destination Media
+	Type           ActionType
+	Source         Media
+	Destination    Media
+	DestinationDir string
 }
 
 func (a *Action) Execute() error {
 	switch a.Type {
-	case ActionCopy:
-		// mediaHome := createMediaDir(destinationDir, Videos, creationTime, "", dryRun)
-
+	case ActionMove:
 		creationTime, err := a.Source.ReadCreationTime()
 		if err != nil {
 			return err
 		}
 
-		// TODO: how to get desitination dir?
 		date := creationTime.Format("2006-01-02")
 		year := strconv.Itoa(creationTime.Year())
-		path := filepath.Join(destinationDir, string(mediaType), year, date, subPath)
 
-		if dryRun {
-			fmt.Printf("creating directory: %s", path)
-		} else {
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				err := os.MkdirAll(path, os.ModePerm)
-				if err != nil {
-					log.Fatalf("Error creating directory: %v", err)
-				}
+		mediaHome := filepath.Join(a.DestinationDir, string(a.Source.GetMediaType()), year, date, a.Source.GetDestinationSubPath())
+		if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
+			err := os.MkdirAll(mediaHome, os.ModePerm)
+			if err != nil {
+				log.Fatalf("Error creating directory: %v", err)
 			}
 		}
 
-		return path
-		destPath := filepath.Join(mediaHome, filepath.Base(path))
-		movefile(path, destPath, dryRun)
+		destPath := filepath.Join(mediaHome, filepath.Base(a.Source.GetPath()))
 
-		fmt.Printf("  Copying from %s to destination\n", a.Source.GetPath())
+		err = os.Rename(a.Source.GetPath(), destPath)
+		if err != nil {
+			log.Fatalf("error moving file: %v", err)
+		}
+		fmt.Printf("  Moving from %s to %s\n", a.Source.GetPath(), destPath)
 	case ActionSkip:
 		fmt.Printf("  Skipping %s\n", a.Source.GetPath())
 	default:
@@ -126,8 +122,8 @@ func (p *Plan) PrintSummary() {
 	fmt.Println("Detailed Actions:")
 	for _, action := range p.Actions {
 		switch action.Type {
-		case ActionCopy:
-			fmt.Printf("  Copy: %s\n", action.Source.GetPath())
+		case ActionMove:
+			fmt.Printf("  Move: %s\n", action.Source.GetPath())
 			copyCount++
 		case ActionSkip:
 			fmt.Printf("  Skip: %s (already exists at %s)\n", action.Source.GetPath(), action.Destination.GetPath())
@@ -137,7 +133,7 @@ func (p *Plan) PrintSummary() {
 	fmt.Printf("\n")
 
 	fmt.Printf("Plan Summary:\n")
-	fmt.Printf("  Files to copy: %d\n", copyCount)
+	fmt.Printf("  Files to move: %d\n", copyCount)
 	fmt.Printf("  Files skipped: %d\n", skipCount)
 
 	fmt.Printf("\n")
@@ -145,10 +141,12 @@ func (p *Plan) PrintSummary() {
 
 type Media interface {
 	GetPath() string
+	// GetDestinationSubPath() string
 	GetFingerprint() string
 	SetFingerprint(fingerprint string)
-	GetMediaType() MediaType
-	ReadCreationTime() (time.Time, error)
+	// GetMediaType() MediaType
+	// ReadCreationTime() (time.Time, error)
+	GetDestinationPath(base string) (string, error)
 }
 
 type Mov struct {
@@ -160,22 +158,10 @@ func (m *Mov) GetPath() string {
 	return m.Path
 }
 
-func (m *Mov) GetFingerprint() string {
-	return m.Fingerprint
-}
-
-func (m *Mov) SetFingerprint(fingerprint string) {
-	m.Fingerprint = fingerprint
-}
-
-func (m *Mov) GetMediaType() MediaType {
-	return Videos
-}
-
-func (m *Mov) ReadCreationTime() (time.Time, error) {
+func (m *Mov) GetDestinationPath(base string) (string, error) {
 	file, err := os.Open(m.Path)
 	if err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 	defer file.Close()
 
@@ -186,7 +172,7 @@ func (m *Mov) ReadCreationTime() (time.Time, error) {
 		// bytes 1-4 is atom size, 5-8 is type
 		// Read atom
 		if _, err := file.Read(buf); err != nil {
-			return time.Time{}, err
+			return "", err
 		}
 
 		if bytes.Equal(buf[4:8], []byte(movieResourceAtomType)) {
@@ -199,7 +185,7 @@ func (m *Mov) ReadCreationTime() (time.Time, error) {
 
 	// read next atom
 	if _, err := file.Read(buf); err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 
 	atomType := string(buf[4:8]) // skip size and read type
@@ -207,21 +193,92 @@ func (m *Mov) ReadCreationTime() (time.Time, error) {
 	case movieHeaderAtomType:
 		// read next atom
 		if _, err := file.Read(buf); err != nil {
-			return time.Time{}, err
+			return "", err
 		}
 
 		// byte 1 is version, byte 2-4 is flags, 5-8 Creation time
 		appleEpoch := int64(binary.BigEndian.Uint32(buf[4:])) // Read creation time
 
-		return time.Unix(appleEpoch-appleEpochAdjustment, 0).Local(), nil
+		creationTime := time.Unix(appleEpoch-appleEpochAdjustment, 0).Local()
+		date := creationTime.Format("2006-01-02")
+		year := strconv.Itoa(creationTime.Year())
+
+		mediaHome := filepath.Join(base, string(Videos), year, date, "")
+		if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
+			err := os.MkdirAll(mediaHome, os.ModePerm)
+			if err != nil {
+				log.Fatalf("Error creating directory: %v", err)
+			}
+		}
+
+		return filepath.Join(mediaHome, filepath.Base(m.Path)), nil
 	case compressedMovieAtomType:
-		return time.Time{}, errors.New("compressed video")
+		return "", errors.New("compressed video")
 	case referenceMovieAtomType:
-		return time.Time{}, errors.New("reference video")
+		return "", errors.New("reference video")
 	default:
-		return time.Time{}, errors.New("did not find movie header atom (mvhd)")
+		return "", errors.New("did not find movie header atom (mvhd)")
 	}
 }
+
+func (m *Mov) GetFingerprint() string {
+	return m.Fingerprint
+}
+
+func (m *Mov) SetFingerprint(fingerprint string) {
+	m.Fingerprint = fingerprint
+}
+
+// func (m *Mov) ReadCreationTime() (time.Time, error) {
+// 	file, err := os.Open(m.Path)
+// 	if err != nil {
+// 		return time.Time{}, err
+// 	}
+// 	defer file.Close()
+//
+// 	buf := make([]byte, 8)
+//
+// 	// Traverse videoBuffer to find movieResourceAtom
+// 	for {
+// 		// bytes 1-4 is atom size, 5-8 is type
+// 		// Read atom
+// 		if _, err := file.Read(buf); err != nil {
+// 			return time.Time{}, err
+// 		}
+//
+// 		if bytes.Equal(buf[4:8], []byte(movieResourceAtomType)) {
+// 			break // found it!
+// 		}
+//
+// 		atomSize := binary.BigEndian.Uint32(buf) // check size of atom
+// 		file.Seek(int64(atomSize)-8, 1)          // jump over data and set seeker at beginning of next atom
+// 	}
+//
+// 	// read next atom
+// 	if _, err := file.Read(buf); err != nil {
+// 		return time.Time{}, err
+// 	}
+//
+// 	atomType := string(buf[4:8]) // skip size and read type
+// 	switch atomType {
+// 	case movieHeaderAtomType:
+// 		// read next atom
+// 		if _, err := file.Read(buf); err != nil {
+// 			return time.Time{}, err
+// 		}
+//
+// 		// byte 1 is version, byte 2-4 is flags, 5-8 Creation time
+// 		appleEpoch := int64(binary.BigEndian.Uint32(buf[4:])) // Read creation time
+//
+// 		return time.Unix(appleEpoch-appleEpochAdjustment, 0).Local(), nil
+// 	case compressedMovieAtomType:
+// 		return time.Time{}, errors.New("compressed video")
+// 	case referenceMovieAtomType:
+// 		return time.Time{}, errors.New("reference video")
+// 	default:
+// 		return time.Time{}, errors.New("did not find movie header atom (mvhd)")
+// 	}
+// }
 
 type Jpg struct {
 	Path        string
@@ -230,6 +287,10 @@ type Jpg struct {
 
 func (j *Jpg) GetPath() string {
 	return j.Path
+}
+
+func (j *Jpg) GetDestinationSubPath() string {
+	return "sooc"
 }
 
 func (j *Jpg) GetFingerprint() string {
@@ -296,6 +357,10 @@ type Raf struct {
 
 func (r *Raf) GetPath() string {
 	return r.Path
+}
+
+func (r *Raf) GetDestinationSubPath() string {
+	return ""
 }
 
 func (r *Raf) GetFingerprint() string {
@@ -447,31 +512,43 @@ func scanFiles(dirPath string) ([]Media, error) {
 	return results, nil
 }
 
-func createPlan(source, destination []Media) Plan {
+func createPlan(sourcePath, destinationPath string) Plan {
+	sourceMedia, err := scanFiles(sourcePath)
+	if err != nil {
+		log.Fatalf("error occured while scanning source directory: %s", err)
+	}
 	sourceMap := make(map[string]Media)
-	destMap := make(map[string]Media)
-
-	for _, media := range source {
+	for _, media := range sourceMedia {
 		sourceMap[media.GetFingerprint()] = media
 	}
 
-	for _, media := range destination {
+	destinationMedia, err := scanFiles(destinationPath)
+	if err != nil {
+		log.Fatalf("error occured while scanning destination directory: %s", err)
+	}
+	destMap := make(map[string]Media)
+	for _, media := range destinationMedia {
 		destMap[media.GetFingerprint()] = media
 	}
 
 	plan := Plan{}
 
+	// TODO: handle when media exists but is not orginized correctly so need to implement check for correct placement of destination media
+	// media should determine it's own destinationPath then I can check correctness with current path
+	// need to create a new loop for destiniation map and check if everything is placed correctly
 	for hash, srcMedia := range sourceMap {
 		if destMedia, exists := destMap[hash]; exists {
 			plan.AddAction(Action{
-				Type:        ActionSkip,
-				Source:      srcMedia,
-				Destination: destMedia,
+				Type:           ActionSkip,
+				Source:         srcMedia,
+				Destination:    destMedia,
+				DestinationDir: destinationPath,
 			})
 		} else {
 			plan.AddAction(Action{
-				Type:   ActionCopy,
-				Source: srcMedia,
+				Type:           ActionMove,
+				Source:         srcMedia,
+				DestinationDir: destinationPath,
 			})
 		}
 	}
@@ -583,19 +660,11 @@ func main() {
 	var args args
 	arg.MustParse(&args)
 
-	sourceMedia, err := scanFiles(args.Source)
-	if err != nil {
-		log.Fatalf("error occured while scanning source directory: %s", err)
+	plan := createPlan(args.Source, args.Destination)
+
+	if !args.DryRun {
+		plan.Apply()
 	}
-
-	destinationMedia, err := scanFiles(args.Destination)
-	if err != nil {
-		log.Fatalf("error occured while scanning destination directory: %s", err)
-	}
-
-	plan := createPlan(sourceMedia, destinationMedia)
-
-	// TODO:  handle dryrun
 
 	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
 	// BUG: _embeded jpg gets created next to raf files. don't do that
