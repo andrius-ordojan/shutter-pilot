@@ -536,6 +536,12 @@ func createPlan(sourcePath, destinationPath string) Plan {
 	// TODO: handle when media exists but is not orginized correctly so need to implement check for correct placement of destination media
 	// media should determine it's own destinationPath then I can check correctness with current path
 	// need to create a new loop for destiniation map and check if everything is placed correctly
+	for hash, destMedia := range destMap {
+		// check if path is correct
+
+		// create error for duplicate media
+	}
+
 	for hash, srcMedia := range sourceMap {
 		if destMedia, exists := destMap[hash]; exists {
 			plan.AddAction(Action{
@@ -665,6 +671,13 @@ func main() {
 	if !args.DryRun {
 		plan.Apply()
 	}
+
+	// TODO: figure out how to write tests. Maybe just mock media to make it simple
+	// test if files are same but renamed
+	// test what happens when file exists but is not placed correctly in output dir
+	// test what happens if there is file without metadata
+	// test that files from source get moved or skipped
+	// test dynamic hash chunk using mocking
 
 	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
 	// BUG: _embeded jpg gets created next to raf files. don't do that
