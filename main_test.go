@@ -20,7 +20,9 @@ func TestShouldSkipWhenMediaExists(t *testing.T) {
 	os.RemoveAll(o)
 }
 
-func TestShouldMoveWhenMediaDoesNotExists(t *testing.T) {
+// reads subdirectories for media
+
+func TestShouldMoveWhenMediaDoesNotExist(t *testing.T) {
 }
 
 func TestShouldMoveToSoocDirWhenProcessingJpgMedia(t *testing.T) {
