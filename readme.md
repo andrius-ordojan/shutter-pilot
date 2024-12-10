@@ -1,4 +1,4 @@
-# media-arrange-lr
+# shutter-pilot
 
 Program to organize media files. I like the structure that Lighroom uses when I import my photos and wanted a similar solution for when I'm on the go or backing up content out of the camera. This allows me to dump my photos and videos into an ingestion folder, then run the tool to read the metadata and organize media into folders based on the creation date.
 
