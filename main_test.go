@@ -1,13 +1,21 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
 // TODO:
 // how to do cleanup and setup for tests
 // how to create temp dir using testing package
 
 func TestShouldSkipWhenMediaExists(t *testing.T) {
-	t.Error("testing error")
+	o, err := os.MkdirTemp(".", "pat")
+	if err != nil {
+		t.Error(err)
+	}
+	t.Log(o)
+	os.RemoveAll(o)
 }
 
 func TestShouldMoveWhenMediaDoesNotExists(t *testing.T) {
