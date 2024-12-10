@@ -1,4 +1,4 @@
-module github.com/andrius-ordojan/video-organizer
+module github.com/andrius-ordojan/shutter-pilot
 
 go 1.22.2
 

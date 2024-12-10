@@ -62,33 +62,11 @@ type Action struct {
 func (a *Action) Execute() error {
 	switch a.Type {
 	case ActionMove:
-		creationTime, err := a.Source.ReadCreationTime()
-		if err != nil {
-			return err
-		}
-
-		date := creationTime.Format("2006-01-02")
-		year := strconv.Itoa(creationTime.Year())
-
-		mediaHome := filepath.Join(a.DestinationDir, string(a.Source.GetMediaType()), year, date, a.Source.GetDestinationSubPath())
-		if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
-			err := os.MkdirAll(mediaHome, os.ModePerm)
-			if err != nil {
-				log.Fatalf("Error creating directory: %v", err)
-			}
-		}
-
-		destPath := filepath.Join(mediaHome, filepath.Base(a.Source.GetPath()))
-
-		err = os.Rename(a.Source.GetPath(), destPath)
-		if err != nil {
-			log.Fatalf("error moving file: %v", err)
-		}
-		fmt.Printf("  Moving from %s to %s\n", a.Source.GetPath(), destPath)
+		fmt.Printf("  Moving from %s to %s\n", a.Source.GetPath(), "unknown yet")
 	case ActionSkip:
 		fmt.Printf("  Skipping %s\n", a.Source.GetPath())
 	default:
-		return fmt.Errorf("unknown action type: %s", a.Type)
+		panic(fmt.Errorf("unknown action type: %s", a.Type))
 	}
 	return nil
 }
@@ -141,11 +119,8 @@ func (p *Plan) PrintSummary() {
 
 type Media interface {
 	GetPath() string
-	// GetDestinationSubPath() string
 	GetFingerprint() string
 	SetFingerprint(fingerprint string)
-	// GetMediaType() MediaType
-	// ReadCreationTime() (time.Time, error)
 	GetDestinationPath(base string) (string, error)
 }
 
@@ -229,57 +204,6 @@ func (m *Mov) SetFingerprint(fingerprint string) {
 	m.Fingerprint = fingerprint
 }
 
-// func (m *Mov) ReadCreationTime() (time.Time, error) {
-// 	file, err := os.Open(m.Path)
-// 	if err != nil {
-// 		return time.Time{}, err
-// 	}
-// 	defer file.Close()
-//
-// 	buf := make([]byte, 8)
-//
-// 	// Traverse videoBuffer to find movieResourceAtom
-// 	for {
-// 		// bytes 1-4 is atom size, 5-8 is type
-// 		// Read atom
-// 		if _, err := file.Read(buf); err != nil {
-// 			return time.Time{}, err
-// 		}
-//
-// 		if bytes.Equal(buf[4:8], []byte(movieResourceAtomType)) {
-// 			break // found it!
-// 		}
-//
-// 		atomSize := binary.BigEndian.Uint32(buf) // check size of atom
-// 		file.Seek(int64(atomSize)-8, 1)          // jump over data and set seeker at beginning of next atom
-// 	}
-//
-// 	// read next atom
-// 	if _, err := file.Read(buf); err != nil {
-// 		return time.Time{}, err
-// 	}
-//
-// 	atomType := string(buf[4:8]) // skip size and read type
-// 	switch atomType {
-// 	case movieHeaderAtomType:
-// 		// read next atom
-// 		if _, err := file.Read(buf); err != nil {
-// 			return time.Time{}, err
-// 		}
-//
-// 		// byte 1 is version, byte 2-4 is flags, 5-8 Creation time
-// 		appleEpoch := int64(binary.BigEndian.Uint32(buf[4:])) // Read creation time
-//
-// 		return time.Unix(appleEpoch-appleEpochAdjustment, 0).Local(), nil
-// 	case compressedMovieAtomType:
-// 		return time.Time{}, errors.New("compressed video")
-// 	case referenceMovieAtomType:
-// 		return time.Time{}, errors.New("reference video")
-// 	default:
-// 		return time.Time{}, errors.New("did not find movie header atom (mvhd)")
-// 	}
-// }
-
 type Jpg struct {
 	Path        string
 	Fingerprint string
@@ -305,24 +229,35 @@ func (j *Jpg) GetMediaType() MediaType {
 	return Photos
 }
 
-func (j *Jpg) ReadCreationTime() (time.Time, error) {
+func (j *Jpg) GetDestinationPath(base string) (string, error) {
 	f, err := os.Open(j.Path)
 	if err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 	defer f.Close()
 
 	exif, err := exif.Decode(f)
 	if err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 
-	dateTime, err := exif.DateTime()
+	creationTime, err := exif.DateTime()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return dateTime, nil
+	date := creationTime.Format("2006-01-02")
+	year := strconv.Itoa(creationTime.Year())
+
+	mediaHome := filepath.Join(base, string(Photos), year, date, "")
+	if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
+		err := os.MkdirAll(mediaHome, os.ModePerm)
+		if err != nil {
+			log.Fatalf("Error creating directory: %v", err)
+		}
+	}
+
+	return filepath.Join(mediaHome, filepath.Base(j.Path)), nil
 }
 
 type Raf struct {
@@ -375,37 +310,48 @@ func (r *Raf) GetMediaType() MediaType {
 	return Photos
 }
 
-func (r *Raf) ReadCreationTime() (time.Time, error) {
+func (r *Raf) GetDestinationPath(base string) (string, error) {
 	f, err := os.Open(r.Path)
 	if err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 	defer f.Close()
 
 	err = binary.Read(f, binary.BigEndian, &r.Header)
 	if err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 
 	jbuf := make([]byte, r.Header.Dir.Jpeg.Len)
 	_, err = f.ReadAt(jbuf, int64(r.Header.Dir.Jpeg.Idx))
 	if err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 	r.Jpeg = jbuf
 
 	buf := bytes.NewBuffer(jbuf)
 	r.Exif, err = exif.Decode(buf)
 	if err != nil {
-		return time.Time{}, err
+		return "", err
 	}
 
-	dateTime, err := r.Exif.DateTime()
+	creationTime, err := r.Exif.DateTime()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	return dateTime, nil
+	date := creationTime.Format("2006-01-02")
+	year := strconv.Itoa(creationTime.Year())
+
+	mediaHome := filepath.Join(base, string(Photos), year, date, "")
+	if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
+		err := os.MkdirAll(mediaHome, os.ModePerm)
+		if err != nil {
+			log.Fatalf("Error creating directory: %v", err)
+		}
+	}
+
+	return filepath.Join(mediaHome, filepath.Base(r.Path)), nil
 }
 
 // Smaller files get a fixed size; larger files use a percentage of the total size.
@@ -536,11 +482,12 @@ func createPlan(sourcePath, destinationPath string) Plan {
 	// TODO: handle when media exists but is not orginized correctly so need to implement check for correct placement of destination media
 	// media should determine it's own destinationPath then I can check correctness with current path
 	// need to create a new loop for destiniation map and check if everything is placed correctly
-	for hash, destMedia := range destMap {
-		// check if path is correct
 
-		// create error for duplicate media
-	}
+	// for hash, destMedia := range destMap {
+	// 	// check if path is correct
+	//
+	// 	// create error for duplicate media
+	// }
 
 	for hash, srcMedia := range sourceMap {
 		if destMedia, exists := destMap[hash]; exists {
@@ -671,13 +618,6 @@ func main() {
 	if !args.DryRun {
 		plan.Apply()
 	}
-
-	// TODO: figure out how to write tests. Maybe just mock media to make it simple
-	// test if files are same but renamed
-	// test what happens when file exists but is not placed correctly in output dir
-	// test what happens if there is file without metadata
-	// test that files from source get moved or skipped
-	// test dynamic hash chunk using mocking
 
 	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
 	// BUG: _embeded jpg gets created next to raf files. don't do that
