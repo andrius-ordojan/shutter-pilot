@@ -14,7 +14,9 @@ func TestShouldSkipWhenMediaExists(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	t.Log(o)
+
+	// TODO: how arrange files in a smart way? need to set some constants or structs for each file
+
 	os.RemoveAll(o)
 }
 
