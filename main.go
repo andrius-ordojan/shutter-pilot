@@ -213,10 +213,6 @@ func (j *Jpg) GetPath() string {
 	return j.Path
 }
 
-func (j *Jpg) GetDestinationSubPath() string {
-	return "sooc"
-}
-
 func (j *Jpg) GetFingerprint() string {
 	return j.Fingerprint
 }
@@ -249,7 +245,7 @@ func (j *Jpg) GetDestinationPath(base string) (string, error) {
 	date := creationTime.Format("2006-01-02")
 	year := strconv.Itoa(creationTime.Year())
 
-	mediaHome := filepath.Join(base, string(Photos), year, date, "")
+	mediaHome := filepath.Join(base, string(Photos), year, date, "sooc")
 	if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
 		err := os.MkdirAll(mediaHome, os.ModePerm)
 		if err != nil {
@@ -292,10 +288,6 @@ type Raf struct {
 
 func (r *Raf) GetPath() string {
 	return r.Path
-}
-
-func (r *Raf) GetDestinationSubPath() string {
-	return ""
 }
 
 func (r *Raf) GetFingerprint() string {
@@ -458,10 +450,10 @@ func scanFiles(dirPath string) ([]Media, error) {
 	return results, nil
 }
 
-func createPlan(sourcePath, destinationPath string) Plan {
+func createPlan(sourcePath, destinationPath string) (Plan, error) {
 	sourceMedia, err := scanFiles(sourcePath)
 	if err != nil {
-		log.Fatalf("error occured while scanning source directory: %s", err)
+		return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
 	}
 	sourceMap := make(map[string]Media)
 	for _, media := range sourceMedia {
@@ -470,7 +462,7 @@ func createPlan(sourcePath, destinationPath string) Plan {
 
 	destinationMedia, err := scanFiles(destinationPath)
 	if err != nil {
-		log.Fatalf("error occured while scanning destination directory: %s", err)
+		return Plan{}, fmt.Errorf("error occured while scanning destination directory: %w", err)
 	}
 	destMap := make(map[string]Media)
 	for _, media := range destinationMedia {
@@ -508,7 +500,7 @@ func createPlan(sourcePath, destinationPath string) Plan {
 
 	plan.PrintSummary()
 
-	return plan
+	return plan, nil
 }
 
 //
@@ -609,18 +601,29 @@ func createPlan(sourcePath, destinationPath string) Plan {
 // 	}
 // }
 
-func main() {
+func run() error {
 	var args args
 	arg.MustParse(&args)
 
-	plan := createPlan(args.Source, args.Destination)
+	plan, err := createPlan(args.Source, args.Destination)
+	if err != nil {
+		return err
+	}
 
 	if !args.DryRun {
 		plan.Apply()
 	}
 
+	return nil
 	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
 	// BUG: _embeded jpg gets created next to raf files. don't do that
+}
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 // TODO: create plan before making changes making sure there are no conflicts and create a report with changes this will be either --plan or --dry-run
