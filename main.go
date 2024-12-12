@@ -59,16 +59,17 @@ type Action struct {
 	DestinationDir string
 }
 
-func (a *Action) Execute() error {
+func (a *Action) Execute() (string, error) {
 	switch a.Type {
 	case ActionMove:
 		fmt.Printf("  Moving from %s to %s\n", a.Source.GetPath(), "unknown yet")
+		return fmt.Sprintf("%s %s %s", string(ActionMove), a.Source.GetPath(), a.Destination.GetPath()), nil
 	case ActionSkip:
 		fmt.Printf("  Skipping %s\n", a.Source.GetPath())
+		return fmt.Sprintf("%s %s", string(ActionSkip), a.Source.GetPath()), nil
 	default:
 		panic(fmt.Errorf("unknown action type: %s", a.Type))
 	}
-	return nil
 }
 
 type Plan struct {
@@ -79,18 +80,20 @@ func (p *Plan) AddAction(action Action) {
 	p.Actions = append(p.Actions, action)
 }
 
-func (p *Plan) Apply() error {
+func (p *Plan) Apply() ([]string, error) {
 	fmt.Println("Applying plan:")
 
+	var results []string
 	for _, action := range p.Actions {
-		err := action.Execute()
+		result, err := action.Execute()
 		if err != nil {
-			return fmt.Errorf("error while executing action: %w", err)
+			return nil, fmt.Errorf("error while executing action: %w", err)
 		}
+		results = append(results, result)
 	}
 
 	fmt.Printf("\n")
-	return nil
+	return results, nil
 }
 
 func (p *Plan) PrintSummary() {
@@ -601,26 +604,32 @@ func createPlan(sourcePath, destinationPath string) (Plan, error) {
 // 	}
 // }
 
-func run() error {
+// TODO: add io writer interface and make function for printing so I can choose where the output is going buf reader or os.stdout
+func run() ([]string, error) {
 	var args args
 	arg.MustParse(&args)
 
 	plan, err := createPlan(args.Source, args.Destination)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !args.DryRun {
-		plan.Apply()
+		results, err := plan.Apply()
+		if err != nil {
+			return nil, err
+		}
+		return results, nil
 	}
 
-	return nil
+	return []string{}, nil
+
 	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
 	// BUG: _embeded jpg gets created next to raf files. don't do that
 }
 
 func main() {
-	if err := run(); err != nil {
+	if _, err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
