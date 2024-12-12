@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,26 +55,84 @@ func setArgs(t *testing.T, args ...string) {
 	})
 }
 
-func TestIntegration_ShouldSkip_WhenMediaExists(t *testing.T) {
-	testSourceDir, err := os.MkdirTemp(".", "tmptest")
+func ls(dir string) {
+	fmt.Printf("ls: %s\n", dir)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, e := range entries {
+		fmt.Println(e.Name())
+	}
+}
+
+func suppressOutput(f func()) {
+	// Save the original stdout and stderr
+	originalStdout := os.Stdout
+	originalStderr := os.Stderr
+
+	// Redirect stdout and stderr to /dev/null
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		panic("failed to open /dev/null")
+	}
+	defer devNull.Close()
+
+	os.Stdout = devNull
+	os.Stderr = devNull
+
+	// Run the function
+	defer func() {
+		os.Stdout = originalStdout
+		os.Stderr = originalStderr
+	}()
+	f()
+}
+
+func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
+	sourceDir, err := os.MkdirTemp(".", "tmp_source")
 	if err != nil {
 		t.Error(err)
 	}
-	defer os.RemoveAll(testSourceDir)
+	defer os.RemoveAll(sourceDir)
+
+	destDir, err := os.MkdirTemp(".", "tmp_dest")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(destDir)
 
 	media := &TestMediaFile{Name: "DSCF9533.RAF", CreationDate: "2024-12-07"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(testSourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
 	media = &TestMediaFile{Name: "DSCF9533.JPG", CreationDate: "2024-12-07"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(testSourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
 	media = &TestMediaFile{Name: "DSCF3517.JPG", CreationDate: "2024-11-13"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(testSourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
 	media = &TestMediaFile{Name: "DSCF3517.RAF", CreationDate: "2024-11-13"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(testSourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
 	media = &TestMediaFile{Name: "DSCF9531.MOV", CreationDate: "2024-12-07"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(testSourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
+	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
 
-	setArgs(t, "app", testSourceDir, "test-output")
-	run()
+	var results []string
+	suppressOutput(func() {
+		setArgs(t, "app", sourceDir, destDir)
+		results, err = run()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	for _, r := range results {
+		if !strings.Contains(r, string(ActionSkip)) {
+			t.Error("expected to only have skip actions")
+		}
+	}
 }
 
 func TestShouldMoveWhenMediaDoesNotExist(t *testing.T) {
@@ -107,7 +167,7 @@ func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T)
 	defer os.RemoveAll(sourceDir)
 
 	setArgs(t, "app", sourceDir, "notExist")
-	err = run()
+	_, err = run()
 
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
@@ -126,7 +186,7 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 	defer os.RemoveAll(destDir)
 
 	setArgs(t, "app", "notExist", destDir)
-	err = run()
+	_, err = run()
 
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
