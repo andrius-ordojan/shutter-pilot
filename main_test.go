@@ -7,27 +7,47 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
+type (
+	TestMediaType string
+)
+
 const (
-	testDataDir = "./testdata/"
+	JpgFile TestMediaType = "jpg"
+	RafFile TestMediaType = "raf"
+	MovFile TestMediaType = "mov"
 )
 
 type TestMediaFile struct {
-	Name         string
-	CreationDate string
+	Name                string
+	Type                TestMediaType
+	SourceDir           string
+	DestinationDir      string
+	ExpectedDestination string
 }
 
-func copyFile(src, dst string) error {
+func (m *TestMediaFile) CopyTo(destination string) error {
+	if m.Name == "" {
+		panic("name is not set")
+	}
+
+	src := filepath.Join("./testdata/", m.Name)
+	dest := filepath.Join(destination, m.Name)
+
 	sourceFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open source file: %w", err)
 	}
 	defer sourceFile.Close()
 
-	destinationFile, err := os.Create(dst)
+	err = os.MkdirAll(destination, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create destination directories: %w", err)
+	}
+
+	destinationFile, err := os.Create(dest)
 	if err != nil {
 		return fmt.Errorf("failed to create destination file: %w", err)
 	}
@@ -44,6 +64,42 @@ func copyFile(src, dst string) error {
 	}
 
 	return nil
+}
+
+func (m *TestMediaFile) FullExpectedDestination() string {
+	if m.DestinationDir == "" {
+		panic("destination dir is not set")
+	}
+	if m.ExpectedDestination == "" {
+		panic("expected destination is not set")
+	}
+	return filepath.Join(m.DestinationDir, m.ExpectedDestination)
+}
+
+func (m *TestMediaFile) CopyToExpectedDestination() error {
+	err := m.CopyTo(m.FullExpectedDestination())
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *TestMediaFile) CheckExistsAtExpectedDestination() error {
+	path := m.FullExpectedDestination()
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("media expected at: %s, but not found", path)
+	} else if err != nil {
+		return fmt.Errorf("error checking file %s: %w", path, err)
+	}
+	return nil
+}
+
+var testMediaFiles = []*TestMediaFile{
+	{Name: "DSCF9533.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-12-07"},
+	{Name: "DSCF9533.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-12-07/sooc"},
+	{Name: "DSCF3517.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-11-13/sooc"},
+	{Name: "DSCF3517.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-11-13"},
+	{Name: "DSCF9531.MOV", Type: MovFile, ExpectedDestination: "videos/2024/2024-12-07"},
 }
 
 func setArgs(t *testing.T, args ...string) {
@@ -103,39 +159,93 @@ func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 	}
 	defer os.RemoveAll(destDir)
 
-	media := &TestMediaFile{Name: "DSCF9533.RAF", CreationDate: "2024-12-07"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
-	media = &TestMediaFile{Name: "DSCF9533.JPG", CreationDate: "2024-12-07"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
-	media = &TestMediaFile{Name: "DSCF3517.JPG", CreationDate: "2024-11-13"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
-	media = &TestMediaFile{Name: "DSCF3517.RAF", CreationDate: "2024-11-13"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
-	media = &TestMediaFile{Name: "DSCF9531.MOV", CreationDate: "2024-12-07"}
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(sourceDir, media.Name))
-	copyFile(filepath.Join(testDataDir, media.Name), filepath.Join(destDir, media.Name))
+	for _, m := range testMediaFiles {
+		m.SourceDir = sourceDir
+		m.DestinationDir = destDir
+		m.CopyTo(sourceDir)
+		m.CopyToExpectedDestination()
+	}
 
-	var results []string
 	suppressOutput(func() {
 		setArgs(t, "app", sourceDir, destDir)
-		results, err = run()
+		err = run()
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 
-	for _, r := range results {
-		if !strings.Contains(r, string(ActionSkip)) {
-			t.Error("expected to only have skip actions")
+	for _, m := range testMediaFiles {
+		err := m.CheckExistsAtExpectedDestination()
+		if err != nil {
+			t.Fatal(err)
 		}
 	}
 }
 
-func TestShouldMoveWhenMediaDoesNotExist(t *testing.T) {
+func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
+	sourceDir, err := os.MkdirTemp(".", "tmp_source")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(sourceDir)
+
+	destDir, err := os.MkdirTemp(".", "tmp_dest")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(destDir)
+
+	// TODO: make a function to help with skipping some numebr of media
+	jpgCount := 0
+	rafCount := 0
+	movCount := 0
+	for _, m := range testMediaFiles {
+		m.SourceDir = sourceDir
+		m.DestinationDir = destDir
+		m.CopyTo(sourceDir)
+
+		switch m.Type {
+		case JpgFile:
+			if jpgCount > 0 {
+				m.CopyToExpectedDestination()
+			}
+			jpgCount++
+		case RafFile:
+			if rafCount > 0 {
+				m.CopyToExpectedDestination()
+			}
+			rafCount++
+		case MovFile:
+			if movCount > 0 {
+				m.CopyToExpectedDestination()
+			}
+			movCount++
+		default:
+			panic("Type is not supported")
+		}
+	}
+
+	setArgs(t, "app", sourceDir, destDir)
+	err = run()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// TODO: uncomment later
+	// suppressOutput(func() {
+	// 	setArgs(t, "app", sourceDir, destDir)
+	// 	results, err = run()
+	// 	if err != nil {
+	// 		t.Fatalf("unexpected error: %v", err)
+	// 	}
+	// })
+
+	// TODO: make helper function to assist in checking all media
+	for _, m := range testMediaFiles {
+		err := m.CheckExistsAtExpectedDestination()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestShouldProcessFilesWhenTheyAreLocatedInSubfolders(t *testing.T) {
@@ -167,7 +277,7 @@ func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T)
 	defer os.RemoveAll(sourceDir)
 
 	setArgs(t, "app", sourceDir, "notExist")
-	_, err = run()
+	err = run()
 
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
@@ -186,7 +296,7 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 	defer os.RemoveAll(destDir)
 
 	setArgs(t, "app", "notExist", destDir)
-	_, err = run()
+	err = run()
 
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
@@ -197,3 +307,4 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 }
 
 // TODO: test dynamic hash chunk using mocking
+// test what happens when unsupported media is present
