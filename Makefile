@@ -4,3 +4,5 @@ build:
 test:
 	go test
 
+clear_tmp:
+	rm -r tmp*
