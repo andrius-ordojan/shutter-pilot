@@ -28,6 +28,7 @@ const (
 	Videos MediaType = "videos"
 
 	ActionMove ActionType = "move"
+	ActionCopy ActionType = "copy"
 	ActionSkip ActionType = "skip"
 
 	appleEpochAdjustment = 2082844800
@@ -45,6 +46,7 @@ const (
 type args struct {
 	Source      string `arg:"positional,required" help:"source directory for media"`
 	Destination string `arg:"positional,required" help:"destination directory for orginised media"`
+	MoveMode    bool   `arg:"-m,--move" default:"false" help:"moves files instead of copying"`
 	DryRun      bool   `arg:"-d,--dryrun" default:"false" help:"does not modify file system"`
 }
 
@@ -53,18 +55,56 @@ func (args) Description() string {
 }
 
 type Action struct {
-	Type           ActionType
-	Source         Media
-	Destination    Media
-	DestinationDir string
+	Type             ActionType
+	SourceMedia      Media
+	DestinationMedia Media
+	DestinationDir   string
 }
 
 func (a *Action) Execute() error {
 	switch a.Type {
+	case ActionCopy:
+		dstPath, err := a.SourceMedia.GetDestinationPath(a.DestinationDir)
+		if err != nil {
+			return nil
+		}
+		fmt.Printf("  Copying from %s to %s\n", a.SourceMedia.GetPath(), dstPath)
+
+		sourceFile, err := os.Open(a.SourceMedia.GetPath())
+		if err != nil {
+			return fmt.Errorf("failed to open source file: %w", err)
+		}
+		defer sourceFile.Close()
+
+		destinationFile, err := os.Create(dstPath)
+		if err != nil {
+			return fmt.Errorf("failed to create destination file: %w", err)
+		}
+		defer destinationFile.Close()
+
+		_, err = io.Copy(destinationFile, sourceFile)
+		if err != nil {
+			return fmt.Errorf("failed to copy content: %w", err)
+		}
+
+		err = destinationFile.Sync()
+		if err != nil {
+			return fmt.Errorf("failed to sync destination file: %w", err)
+		}
 	case ActionMove:
-		fmt.Printf("  Moving from %s to %s\n", a.Source.GetPath(), "unknown yet")
+		dstPath, err := a.SourceMedia.GetDestinationPath(a.DestinationDir)
+		if err != nil {
+			return nil
+		}
+
+		fmt.Printf("  Moving from %s to %s\n", a.SourceMedia.GetPath(), dstPath)
+
+		err = os.Rename(a.SourceMedia.GetPath(), dstPath)
+		if err != nil {
+			log.Fatalf("error moving file: %v", err)
+		}
 	case ActionSkip:
-		fmt.Printf("  Skipping %s\n", a.Source.GetPath())
+		fmt.Printf("  Skipping %s\n", a.SourceMedia.GetPath())
 	default:
 		panic(fmt.Errorf("unknown action type: %s", a.Type))
 	}
@@ -72,7 +112,8 @@ func (a *Action) Execute() error {
 }
 
 type Plan struct {
-	Actions []Action
+	Actions  []Action
+	MoveMode bool
 }
 
 func (p *Plan) AddAction(action Action) {
@@ -94,6 +135,7 @@ func (p *Plan) Apply() error {
 }
 
 func (p *Plan) PrintSummary() {
+	moveCount := 0
 	copyCount := 0
 	skipCount := 0
 
@@ -101,17 +143,24 @@ func (p *Plan) PrintSummary() {
 	for _, action := range p.Actions {
 		switch action.Type {
 		case ActionMove:
-			fmt.Printf("  Move: %s\n", action.Source.GetPath())
+			fmt.Printf("  Move: %s\n", action.SourceMedia.GetPath())
+			moveCount++
+		case ActionCopy:
+			fmt.Printf("  Copy: %s\n", action.SourceMedia.GetPath())
 			copyCount++
 		case ActionSkip:
-			fmt.Printf("  Skip: %s (already exists at %s)\n", action.Source.GetPath(), action.Destination.GetPath())
+			fmt.Printf("  Skip: %s (already exists at %s)\n", action.SourceMedia.GetPath(), action.DestinationMedia.GetPath())
 			skipCount++
 		}
 	}
 	fmt.Printf("\n")
 
 	fmt.Printf("Plan Summary:\n")
-	fmt.Printf("  Files to move: %d\n", copyCount)
+	if p.MoveMode {
+		fmt.Printf("  Files to move: %d\n", moveCount)
+	} else {
+		fmt.Printf("  Files to copy: %d\n", copyCount)
+	}
 	fmt.Printf("  Files skipped: %d\n", skipCount)
 
 	fmt.Printf("\n")
@@ -450,7 +499,7 @@ func scanFiles(dirPath string) ([]Media, error) {
 	return results, nil
 }
 
-func createPlan(sourcePath, destinationPath string) (Plan, error) {
+func createPlan(sourcePath, destinationPath string, moveMode bool) (Plan, error) {
 	sourceMedia, err := scanFiles(sourcePath)
 	if err != nil {
 		return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
@@ -469,7 +518,7 @@ func createPlan(sourcePath, destinationPath string) (Plan, error) {
 		destMap[media.GetFingerprint()] = media
 	}
 
-	plan := Plan{}
+	plan := Plan{MoveMode: moveMode}
 
 	// TODO: handle when media exists but is not orginized correctly so need to implement check for correct placement of destination media
 	// media should determine it's own destinationPath then I can check correctness with current path
@@ -484,17 +533,25 @@ func createPlan(sourcePath, destinationPath string) (Plan, error) {
 	for hash, srcMedia := range sourceMap {
 		if destMedia, exists := destMap[hash]; exists {
 			plan.AddAction(Action{
-				Type:           ActionSkip,
-				Source:         srcMedia,
-				Destination:    destMedia,
-				DestinationDir: destinationPath,
+				Type:             ActionSkip,
+				SourceMedia:      srcMedia,
+				DestinationMedia: destMedia,
+				DestinationDir:   destinationPath,
 			})
 		} else {
-			plan.AddAction(Action{
-				Type:           ActionMove,
-				Source:         srcMedia,
-				DestinationDir: destinationPath,
-			})
+			if moveMode {
+				plan.AddAction(Action{
+					Type:           ActionMove,
+					SourceMedia:    srcMedia,
+					DestinationDir: destinationPath,
+				})
+			} else {
+				plan.AddAction(Action{
+					Type:           ActionCopy,
+					SourceMedia:    srcMedia,
+					DestinationDir: destinationPath,
+				})
+			}
 		}
 	}
 
@@ -606,7 +663,7 @@ func run() error {
 	var args args
 	arg.MustParse(&args)
 
-	plan, err := createPlan(args.Source, args.Destination)
+	plan, err := createPlan(args.Source, args.Destination, args.MoveMode)
 	if err != nil {
 		return err
 	}
@@ -634,30 +691,3 @@ func main() {
 // TODO: create plan before making changes making sure there are no conflicts and create a report with changes this will be either --plan or --dry-run
 // TODO: never overwrite existing files
 // TODO: clean up source dir if it's empty of content
-
-// Scan Files:
-//
-//     For each file, compute its partial hash and include metadata.
-//
-// Check Uniqueness:
-//
-//     Compare the computed hash to the hashes of files in the destination folder.
-//     Since you're rehashing for every run, the destination folder itself serves as the "state."
-//
-// Resolve Conflicts:
-//
-//     If a computed hash matches a file already in the destination folder:
-//         Skip the file (if content is identical).
-//         Log an error or handle the conflict (if content differs).
-//
-// Simulate (Dry Run):
-//
-//     Before making changes, output a plan of what will happen (e.g., files to copy, skip, or rename).
-//
-// Execute Plan:
-//
-//     Perform the copy/move operations.
-//
-//
-//
-//
