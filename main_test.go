@@ -384,3 +384,6 @@ func runWithVolumeKnob(t *testing.T, silent bool, args ...string) error {
 }
 
 // TODO: add tests for move and copy
+//
+//
+// test that existsing files will never be overwritten
