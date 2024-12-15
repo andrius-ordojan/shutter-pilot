@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -84,14 +83,24 @@ func (m *TestMediaFile) CopyToExpectedDestination() error {
 	return nil
 }
 
-func (m *TestMediaFile) CheckExistsAtExpectedDestination() error {
-	path := m.FullExpectedDestination()
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("media expected at: %s, but not found", path)
+func (m *TestMediaFile) CheckExistsAt(path string) error {
+	fullPath := filepath.Join(path, m.Name)
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		return fmt.Errorf("media expected at: %s, but not found", fullPath)
 	} else if err != nil {
-		return fmt.Errorf("error checking file %s: %w", path, err)
+		return fmt.Errorf("error checking file %s: %w", fullPath, err)
 	}
 	return nil
+}
+
+func (m *TestMediaFile) CheckMissingAt(path string) error {
+	fullPath := filepath.Join(path, m.Name)
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("error checking file %s: %w", fullPath, err)
+	}
+	return fmt.Errorf("media not expected at: %s, but found", fullPath)
 }
 
 var testMediaFiles = []*TestMediaFile{
@@ -100,50 +109,6 @@ var testMediaFiles = []*TestMediaFile{
 	{Name: "DSCF3517.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-11-13/sooc"},
 	{Name: "DSCF3517.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-11-13"},
 	{Name: "DSCF9531.MOV", Type: MovFile, ExpectedDestination: "videos/2024/2024-12-07"},
-}
-
-func setArgs(t *testing.T, args ...string) {
-	originalArgs := os.Args
-
-	os.Args = args
-	t.Cleanup(func() {
-		os.Args = originalArgs
-	})
-}
-
-func ls(dir string) {
-	fmt.Printf("ls: %s\n", dir)
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _, e := range entries {
-		fmt.Println(e.Name())
-	}
-}
-
-func suppressOutput(f func()) {
-	// Save the original stdout and stderr
-	originalStdout := os.Stdout
-	originalStderr := os.Stderr
-
-	// Redirect stdout and stderr to /dev/null
-	devNull, err := os.Open(os.DevNull)
-	if err != nil {
-		panic("failed to open /dev/null")
-	}
-	defer devNull.Close()
-
-	os.Stdout = devNull
-	os.Stderr = devNull
-
-	// Run the function
-	defer func() {
-		os.Stdout = originalStdout
-		os.Stderr = originalStderr
-	}()
-	f()
 }
 
 func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
@@ -166,23 +131,25 @@ func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 		m.CopyToExpectedDestination()
 	}
 
-	suppressOutput(func() {
-		setArgs(t, "app", sourceDir, destDir)
-		err = run()
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
+	err = runWithVolumeKnob(t, true, "app", sourceDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for _, m := range testMediaFiles {
-		err := m.CheckExistsAtExpectedDestination()
+		err := m.CheckExistsAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = m.CheckExistsAt(m.SourceDir)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 }
 
-func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
+func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 	sourceDir, err := os.MkdirTemp(".", "tmp_source")
 	if err != nil {
 		t.Error(err)
@@ -225,23 +192,88 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 		}
 	}
 
-	setArgs(t, "app", sourceDir, destDir)
-	err = run()
+	err = runWithVolumeKnob(t, true, "app", sourceDir, destDir)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatal(err)
 	}
-	// TODO: uncomment later
-	// suppressOutput(func() {
-	// 	setArgs(t, "app", sourceDir, destDir)
-	// 	results, err = run()
-	// 	if err != nil {
-	// 		t.Fatalf("unexpected error: %v", err)
-	// 	}
-	// })
 
-	// TODO: make helper function to assist in checking all media
 	for _, m := range testMediaFiles {
-		err := m.CheckExistsAtExpectedDestination()
+		err := m.CheckExistsAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = m.CheckExistsAt(m.SourceDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
+	sourceDir, err := os.MkdirTemp(".", "tmp_source")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(sourceDir)
+
+	destDir, err := os.MkdirTemp(".", "tmp_dest")
+	if err != nil {
+		t.Error(err)
+	}
+	defer os.RemoveAll(destDir)
+
+	// TODO: make a function to help with skipping some numebr of media
+	var shouldBeMissing []TestMediaFile
+	jpgCount := 0
+	rafCount := 0
+	movCount := 0
+	for _, m := range testMediaFiles {
+		m.SourceDir = sourceDir
+		m.DestinationDir = destDir
+		m.CopyTo(sourceDir)
+
+		switch m.Type {
+		case JpgFile:
+			if jpgCount > 0 {
+				m.CopyToExpectedDestination()
+			} else {
+				shouldBeMissing = append(shouldBeMissing, *m)
+			}
+			jpgCount++
+		case RafFile:
+			if rafCount > 0 {
+				m.CopyToExpectedDestination()
+			} else {
+				shouldBeMissing = append(shouldBeMissing, *m)
+			}
+			rafCount++
+		case MovFile:
+			if movCount > 0 {
+				m.CopyToExpectedDestination()
+			} else {
+				shouldBeMissing = append(shouldBeMissing, *m)
+			}
+			movCount++
+		default:
+			panic("Type is not supported")
+		}
+	}
+
+	err = runWithVolumeKnob(t, true, "app", "--move", sourceDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range testMediaFiles {
+		err := m.CheckExistsAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, m := range shouldBeMissing {
+		err = m.CheckMissingAt(m.SourceDir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -269,6 +301,8 @@ func TestShouldMoveWhenMediaExistsButIsNotPlacedCorrectly(t *testing.T) {
 func TestShouldErrorWhenMetadataNotPresent(t *testing.T) {
 }
 
+// should error or conflict when media with same name already exists but the hash doesn't match
+
 func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T) {
 	sourceDir, err := os.MkdirTemp(".", "tmptest")
 	if err != nil {
@@ -276,9 +310,7 @@ func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T)
 	}
 	defer os.RemoveAll(sourceDir)
 
-	setArgs(t, "app", sourceDir, "notExist")
-	err = run()
-
+	err = runWithVolumeKnob(t, true, "app", sourceDir, "notExist")
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
 	}
@@ -295,12 +327,11 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 	}
 	defer os.RemoveAll(destDir)
 
-	setArgs(t, "app", "notExist", destDir)
-	err = run()
-
+	err = runWithVolumeKnob(t, true, "app", "notExist", destDir)
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
 	}
+
 	if !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("expected error to be os.ErrNotExist, but got: %v", err)
 	}
@@ -308,3 +339,48 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 
 // TODO: test dynamic hash chunk using mocking
 // test what happens when unsupported media is present
+
+func runWithVolumeKnob(t *testing.T, silent bool, args ...string) error {
+	if !silent {
+		originalArgs := os.Args
+		os.Args = args
+		t.Cleanup(func() {
+			os.Args = originalArgs
+		})
+
+		err := run()
+		if err != nil {
+			return err
+		}
+	} else {
+		originalStdout := os.Stdout
+		originalStderr := os.Stderr
+
+		devNull, err := os.Open(os.DevNull)
+		if err != nil {
+			panic("failed to open /dev/null")
+		}
+		defer devNull.Close()
+
+		os.Stdout = devNull
+		os.Stderr = devNull
+
+		defer func() {
+			os.Stdout = originalStdout
+			os.Stderr = originalStderr
+		}()
+
+		originalArgs := os.Args
+		os.Args = args
+		t.Cleanup(func() {
+			os.Args = originalArgs
+		})
+		err = run()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// TODO: add tests for move and copy
