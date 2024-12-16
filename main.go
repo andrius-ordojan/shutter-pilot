@@ -37,9 +37,6 @@ func run() error {
 	}
 
 	return nil
-
-	// processFilesInDirectory(args.Source, args.Destination, args.DryRun)
-	// BUG: _embeded jpg gets created next to raf files. don't do that
 }
 
 func main() {
