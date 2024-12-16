@@ -56,10 +56,10 @@ func scanFiles(dirPath string) ([]media.File, error) {
 }
 
 func calculateChunkSize(fileSize int64) int64 {
-	const minChunkSize = OneMB
-	const maxChunkSize = 10 * OneMB
+	const minChunkSize = oneMB
+	const maxChunkSize = 10 * oneMB
 
-	if fileSize < 100*OneMB {
+	if fileSize < 100*oneMB {
 		return minChunkSize
 	}
 

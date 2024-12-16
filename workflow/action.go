@@ -10,32 +10,32 @@ import (
 )
 
 type (
-	ActionType string
+	actionType string
 )
 
 const (
-	ActionMove ActionType = "move"
-	ActionCopy ActionType = "copy"
-	ActionSkip ActionType = "skip"
+	move actionType = "move"
+	copy actionType = "copy"
+	skip actionType = "skip"
 )
 
-type Action struct {
-	Type             ActionType
-	SourceMedia      media.File
-	DestinationMedia media.File
-	DestinationDir   string
+type action struct {
+	aType            actionType
+	sourceMedia      media.File
+	destinationMedia media.File
+	destinationDir   string
 }
 
-func (a *Action) Execute() error {
-	switch a.Type {
-	case ActionCopy:
-		dstPath, err := a.SourceMedia.GetDestinationPath(a.DestinationDir)
+func (a *action) execute() error {
+	switch a.aType {
+	case copy:
+		dstPath, err := a.sourceMedia.GetDestinationPath(a.destinationDir)
 		if err != nil {
 			return nil
 		}
-		fmt.Printf("  Copying from %s to %s\n", a.SourceMedia.GetPath(), dstPath)
+		fmt.Printf("  Copying from %s to %s\n", a.sourceMedia.GetPath(), dstPath)
 
-		sourceFile, err := os.Open(a.SourceMedia.GetPath())
+		sourceFile, err := os.Open(a.sourceMedia.GetPath())
 		if err != nil {
 			return fmt.Errorf("failed to open source file: %w", err)
 		}
@@ -56,22 +56,22 @@ func (a *Action) Execute() error {
 		if err != nil {
 			return fmt.Errorf("failed to sync destination file: %w", err)
 		}
-	case ActionMove:
-		dstPath, err := a.SourceMedia.GetDestinationPath(a.DestinationDir)
+	case move:
+		dstPath, err := a.sourceMedia.GetDestinationPath(a.destinationDir)
 		if err != nil {
 			return nil
 		}
 
-		fmt.Printf("  Moving from %s to %s\n", a.SourceMedia.GetPath(), dstPath)
+		fmt.Printf("  Moving from %s to %s\n", a.sourceMedia.GetPath(), dstPath)
 
-		err = os.Rename(a.SourceMedia.GetPath(), dstPath)
+		err = os.Rename(a.sourceMedia.GetPath(), dstPath)
 		if err != nil {
 			log.Fatalf("error moving file: %v", err)
 		}
-	case ActionSkip:
-		fmt.Printf("  Skipping %s\n", a.SourceMedia.GetPath())
+	case skip:
+		fmt.Printf("  Skipping %s\n", a.sourceMedia.GetPath())
 	default:
-		panic(fmt.Errorf("unknown action type: %s", a.Type))
+		panic(fmt.Errorf("unknown action type: %s", a.aType))
 	}
 	return nil
 }

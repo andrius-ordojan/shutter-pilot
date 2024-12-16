@@ -74,7 +74,7 @@ func (m *Mov) GetDestinationPath(base string) (string, error) {
 		date := creationTime.Format("2006-01-02")
 		year := strconv.Itoa(creationTime.Year())
 
-		mediaHome := filepath.Join(base, string(Videos), year, date, "")
+		mediaHome := filepath.Join(base, string(videos), year, date, "")
 		if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
 			err := os.MkdirAll(mediaHome, os.ModePerm)
 			if err != nil {

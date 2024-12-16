@@ -53,10 +53,6 @@ func (r *Raf) SetFingerprint(fingerprint string) {
 	r.Fingerprint = fingerprint
 }
 
-func (r *Raf) GetMediaType() Type {
-	return Photos
-}
-
 func (r *Raf) GetDestinationPath(base string) (string, error) {
 	f, err := os.Open(r.Path)
 	if err != nil {
@@ -90,7 +86,7 @@ func (r *Raf) GetDestinationPath(base string) (string, error) {
 	date := creationTime.Format("2006-01-02")
 	year := strconv.Itoa(creationTime.Year())
 
-	mediaHome := filepath.Join(base, string(Photos), year, date, "")
+	mediaHome := filepath.Join(base, string(photos), year, date, "")
 	if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
 		err := os.MkdirAll(mediaHome, os.ModePerm)
 		if err != nil {

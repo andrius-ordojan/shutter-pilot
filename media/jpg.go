@@ -11,7 +11,7 @@ import (
 
 type Jpg struct {
 	Path        string
-	Fingerprint string
+	fingerprint string
 }
 
 func (j *Jpg) GetPath() string {
@@ -19,15 +19,11 @@ func (j *Jpg) GetPath() string {
 }
 
 func (j *Jpg) GetFingerprint() string {
-	return j.Fingerprint
+	return j.fingerprint
 }
 
 func (j *Jpg) SetFingerprint(fingerprint string) {
-	j.Fingerprint = fingerprint
-}
-
-func (j *Jpg) GetMediaType() Type {
-	return Photos
+	j.fingerprint = fingerprint
 }
 
 func (j *Jpg) GetDestinationPath(base string) (string, error) {
@@ -50,7 +46,7 @@ func (j *Jpg) GetDestinationPath(base string) (string, error) {
 	date := creationTime.Format("2006-01-02")
 	year := strconv.Itoa(creationTime.Year())
 
-	mediaHome := filepath.Join(base, string(Photos), year, date, "sooc")
+	mediaHome := filepath.Join(base, string(photos), year, date, "sooc")
 	if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
 		err := os.MkdirAll(mediaHome, os.ModePerm)
 		if err != nil {

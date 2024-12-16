@@ -7,9 +7,9 @@ type File interface {
 	GetDestinationPath(base string) (string, error)
 }
 
-type Type string
+type mediaType string
 
 const (
-	Photos Type = "photos"
-	Videos Type = "videos"
+	photos mediaType = "photos"
+	videos mediaType = "videos"
 )
