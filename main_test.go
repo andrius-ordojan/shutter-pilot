@@ -111,44 +111,6 @@ var testMediaFiles = []*TestMediaFile{
 	{Name: "DSCF9531.MOV", Type: MovFile, ExpectedDestination: "videos/2024/2024-12-07"},
 }
 
-func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
-	sourceDir, err := os.MkdirTemp(".", "tmp_source")
-	if err != nil {
-		t.Error(err)
-	}
-	defer os.RemoveAll(sourceDir)
-
-	destDir, err := os.MkdirTemp(".", "tmp_dest")
-	if err != nil {
-		t.Error(err)
-	}
-	defer os.RemoveAll(destDir)
-
-	for _, m := range testMediaFiles {
-		m.SourceDir = sourceDir
-		m.DestinationDir = destDir
-		m.CopyTo(sourceDir)
-		m.CopyToExpectedDestination()
-	}
-
-	err = runWithVolumeKnob(t, true, "app", sourceDir, destDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	for _, m := range testMediaFiles {
-		err := m.CheckExistsAt(m.FullExpectedDestination())
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = m.CheckExistsAt(m.SourceDir)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-}
-
 func makeSourceDir(t *testing.T) string {
 	sourceDir, err := os.MkdirTemp(".", "tmp_source")
 	if err != nil {
@@ -169,6 +131,35 @@ func makeDestinationDir(t *testing.T) string {
 	t.Cleanup(func() { os.RemoveAll(destDir) })
 
 	return destDir
+}
+
+func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
+	srcDir := makeSourceDir(t)
+	destDir := makeDestinationDir(t)
+
+	for _, m := range testMediaFiles {
+		m.SourceDir = srcDir
+		m.DestinationDir = destDir
+		m.CopyTo(srcDir)
+		m.CopyToExpectedDestination()
+	}
+
+	err := runWithVolumeKnob(t, true, "app", srcDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range testMediaFiles {
+		err := m.CheckExistsAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = m.CheckExistsAt(m.SourceDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
