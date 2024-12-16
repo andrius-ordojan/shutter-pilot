@@ -149,27 +149,40 @@ func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 	}
 }
 
-func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
+func makeSourceDir(t *testing.T) string {
 	sourceDir, err := os.MkdirTemp(".", "tmp_source")
 	if err != nil {
 		t.Error(err)
 	}
-	defer os.RemoveAll(sourceDir)
 
+	t.Cleanup(func() { os.RemoveAll(sourceDir) })
+
+	return sourceDir
+}
+
+func makeDestinationDir(t *testing.T) string {
 	destDir, err := os.MkdirTemp(".", "tmp_dest")
 	if err != nil {
 		t.Error(err)
 	}
-	defer os.RemoveAll(destDir)
+
+	t.Cleanup(func() { os.RemoveAll(destDir) })
+
+	return destDir
+}
+
+func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
+	srcDir := makeSourceDir(t)
+	destDir := makeDestinationDir(t)
 
 	// TODO: make a function to help with skipping some numebr of media
 	jpgCount := 0
 	rafCount := 0
 	movCount := 0
 	for _, m := range testMediaFiles {
-		m.SourceDir = sourceDir
+		m.SourceDir = srcDir
 		m.DestinationDir = destDir
-		m.CopyTo(sourceDir)
+		m.CopyTo(srcDir)
 
 		switch m.Type {
 		case JpgFile:
@@ -192,7 +205,7 @@ func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 		}
 	}
 
-	err = runWithVolumeKnob(t, true, "app", sourceDir, destDir)
+	err := runWithVolumeKnob(t, true, "app", srcDir, destDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,17 +224,8 @@ func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 }
 
 func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
-	sourceDir, err := os.MkdirTemp(".", "tmp_source")
-	if err != nil {
-		t.Error(err)
-	}
-	defer os.RemoveAll(sourceDir)
-
-	destDir, err := os.MkdirTemp(".", "tmp_dest")
-	if err != nil {
-		t.Error(err)
-	}
-	defer os.RemoveAll(destDir)
+	srcDir := makeSourceDir(t)
+	destDir := makeDestinationDir(t)
 
 	// TODO: make a function to help with skipping some numebr of media
 	var shouldBeMissing []TestMediaFile
@@ -229,9 +233,9 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 	rafCount := 0
 	movCount := 0
 	for _, m := range testMediaFiles {
-		m.SourceDir = sourceDir
+		m.SourceDir = srcDir
 		m.DestinationDir = destDir
-		m.CopyTo(sourceDir)
+		m.CopyTo(srcDir)
 
 		switch m.Type {
 		case JpgFile:
@@ -260,7 +264,7 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 		}
 	}
 
-	err = runWithVolumeKnob(t, true, "app", "--move", sourceDir, destDir)
+	err := runWithVolumeKnob(t, true, "app", "--move", srcDir, destDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +284,9 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 	}
 }
 
-func TestShouldProcessFilesWhenTheyAreLocatedInSubfolders(t *testing.T) {
+func Test_ShouldProcessFiles_WhenTheyAreLocatedInSubfolders(t *testing.T) {
+	srcDir := makeSourceDir(t)
+	destDir := makeDestinationDir(t)
 }
 
 func TestShouldMoveToSoocDirWhenProcessingJpgMedia(t *testing.T) {
