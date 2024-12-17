@@ -372,7 +372,10 @@ func Test_ShouldMove_WhenMediaExistsButIsNotLocatedCorrectly(t *testing.T) {
 	}
 }
 
-func Test_ShouldError_WhenDuplicateMediaExists(t *testing.T) {
+func Test_ShouldError_WhenDuplicateMediaExistsInDestinations(t *testing.T) {
+}
+
+func Test_ShouldError_WhenDuplicateMediaExistsInSources(t *testing.T) {
 }
 
 func TestShouldErrorWhenMetadataNotPresent(t *testing.T) {
