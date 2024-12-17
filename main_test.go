@@ -330,8 +330,7 @@ func Test_ShouldSkip_WhenMediaContentIsSameButNameIsDifferent(t *testing.T) {
 	mediaCopy := *media
 
 	newMediaName := "newname.raf"
-	os.Rename(filepath.Join(media.FullExpectedDestination(), media.Name), filepath.Join(media.FullExpectedDestination(), newMediaName))
-	// TODO: will still pass if it's not moved to expected destination?
+	os.Rename(filepath.Join(media.FullExpectedDestination(), media.Name), filepath.Join(destDir, newMediaName))
 
 	err := runSilently(t, "app", srcDir, destDir)
 	if err != nil {
@@ -371,6 +370,9 @@ func Test_ShouldMove_WhenMediaExistsButIsNotLocatedCorrectly(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+}
+
+func Test_ShouldError_WhenDuplicateMediaExists(t *testing.T) {
 }
 
 func TestShouldErrorWhenMetadataNotPresent(t *testing.T) {

@@ -85,10 +85,6 @@ func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error)
 
 	plan := Plan{moveMode: moveMode}
 
-	// TODO: handle when media exists but is not orginized correctly so need to implement check for correct placement of destination media
-	// media should determine it's own destinationPath then I can check correctness with current path
-	// need to create a new loop for destiniation map and check if everything is placed correctly
-
 	for _, destMedia := range destMap {
 		mediaDestPath, err := destMedia.GetDestinationPath(destinationPath)
 		if err != nil {
