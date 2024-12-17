@@ -12,16 +12,16 @@ const (
 	oneGB = 1024 * oneMB
 )
 
-type plan struct {
+type Plan struct {
 	actions  []action
 	moveMode bool
 }
 
-func (p *plan) addAction(action action) {
+func (p *Plan) addAction(action action) {
 	p.actions = append(p.actions, action)
 }
 
-func (p *plan) Apply() error {
+func (p *Plan) Apply() error {
 	fmt.Println("Applying plan:")
 
 	for _, action := range p.actions {
@@ -35,7 +35,7 @@ func (p *plan) Apply() error {
 	return nil
 }
 
-func (p *plan) printSummary() {
+func (p *Plan) printSummary() {
 	moveCount := 0
 	copyCount := 0
 	skipCount := 0
@@ -57,20 +57,17 @@ func (p *plan) printSummary() {
 	fmt.Printf("\n")
 
 	fmt.Printf("Plan Summary:\n")
-	if p.moveMode {
-		fmt.Printf("  Files to move: %d\n", moveCount)
-	} else {
-		fmt.Printf("  Files to copy: %d\n", copyCount)
-	}
+	fmt.Printf("  Files to move: %d\n", moveCount)
+	fmt.Printf("  Files to copy: %d\n", copyCount)
 	fmt.Printf("  Files skipped: %d\n", skipCount)
 
 	fmt.Printf("\n")
 }
 
-func CreatePlan(sourcePath, destinationPath string, moveMode bool) (plan, error) {
+func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error) {
 	sourceMedia, err := scanFiles(sourcePath)
 	if err != nil {
-		return plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
+		return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
 	}
 	sourceMap := make(map[string]media.File)
 	for _, media := range sourceMedia {
@@ -79,24 +76,35 @@ func CreatePlan(sourcePath, destinationPath string, moveMode bool) (plan, error)
 
 	destinationMedia, err := scanFiles(destinationPath)
 	if err != nil {
-		return plan{}, fmt.Errorf("error occured while scanning destination directory: %w", err)
+		return Plan{}, fmt.Errorf("error occured while scanning destination directory: %w", err)
 	}
 	destMap := make(map[string]media.File)
 	for _, media := range destinationMedia {
 		destMap[media.GetFingerprint()] = media
 	}
 
-	plan := plan{moveMode: moveMode}
+	plan := Plan{moveMode: moveMode}
 
 	// TODO: handle when media exists but is not orginized correctly so need to implement check for correct placement of destination media
 	// media should determine it's own destinationPath then I can check correctness with current path
 	// need to create a new loop for destiniation map and check if everything is placed correctly
 
-	// for hash, destMedia := range destMap {
-	// 	// check if path is correct
-	//
-	// 	// create error for duplicate media
-	// }
+	for _, destMedia := range destMap {
+		mediaDestPath, err := destMedia.GetDestinationPath(destinationPath)
+		if err != nil {
+			return Plan{}, err
+		}
+
+		if destMedia.GetPath() != mediaDestPath {
+			plan.addAction(action{
+				aType:          move,
+				sourceMedia:    destMedia,
+				destinationDir: destinationPath,
+			})
+		}
+
+		// TODO: create error for duplicate media
+	}
 
 	for hash, srcMedia := range sourceMap {
 		if destMedia, exists := destMap[hash]; exists {
