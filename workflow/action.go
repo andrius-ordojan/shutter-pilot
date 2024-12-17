@@ -20,7 +20,8 @@ const (
 )
 
 type action struct {
-	aType            actionType
+	aType actionType
+	// TODO: change to from and to maybe?
 	sourceMedia      media.File
 	destinationMedia media.File
 	destinationDir   string
