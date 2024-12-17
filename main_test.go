@@ -111,31 +111,51 @@ var testMediaFiles = []*TestMediaFile{
 	{Name: "DSCF9531.MOV", Type: MovFile, ExpectedDestination: "videos/2024/2024-12-07"},
 }
 
-func makeSourceDir(t *testing.T) string {
+func makeSourceDirWithOutCleanup(t *testing.T) string {
+	return makeSourceDir(t, false)
+}
+
+func makeSourceDirWithCleanup(t *testing.T) string {
+	return makeSourceDir(t, true)
+}
+
+func makeSourceDir(t *testing.T, cleanup bool) string {
 	sourceDir, err := os.MkdirTemp(".", "tmp_source")
 	if err != nil {
 		t.Error(err)
 	}
 
-	t.Cleanup(func() { os.RemoveAll(sourceDir) })
+	if cleanup {
+		t.Cleanup(func() { os.RemoveAll(sourceDir) })
+	}
 
 	return sourceDir
 }
 
-func makeDestinationDir(t *testing.T) string {
+func makeDestinationDirWithOutCleanup(t *testing.T) string {
+	return makeDestinationDir(t, false)
+}
+
+func makeDestinationDirWithCleanup(t *testing.T) string {
+	return makeDestinationDir(t, true)
+}
+
+func makeDestinationDir(t *testing.T, cleanup bool) string {
 	destDir, err := os.MkdirTemp(".", "tmp_dest")
 	if err != nil {
 		t.Error(err)
 	}
 
-	t.Cleanup(func() { os.RemoveAll(destDir) })
+	if cleanup {
+		t.Cleanup(func() { os.RemoveAll(destDir) })
+	}
 
 	return destDir
 }
 
 func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
-	srcDir := makeSourceDir(t)
-	destDir := makeDestinationDir(t)
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
 
 	for _, m := range testMediaFiles {
 		m.SourceDir = srcDir
@@ -144,7 +164,7 @@ func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 		m.CopyToExpectedDestination()
 	}
 
-	err := runWithVolumeKnob(t, true, "app", srcDir, destDir)
+	err := runSilently(t, "app", srcDir, destDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,8 +183,8 @@ func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 }
 
 func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
-	srcDir := makeSourceDir(t)
-	destDir := makeDestinationDir(t)
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
 
 	// TODO: make a function to help with skipping some numebr of media
 	jpgCount := 0
@@ -196,7 +216,7 @@ func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 		}
 	}
 
-	err := runWithVolumeKnob(t, true, "app", srcDir, destDir)
+	err := runSilently(t, "app", srcDir, destDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,8 +235,8 @@ func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 }
 
 func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
-	srcDir := makeSourceDir(t)
-	destDir := makeDestinationDir(t)
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
 
 	// TODO: make a function to help with skipping some numebr of media
 	var shouldBeMissing []TestMediaFile
@@ -255,7 +275,7 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 		}
 	}
 
-	err := runWithVolumeKnob(t, true, "app", "--move", srcDir, destDir)
+	err := runSilently(t, "app", "--move", srcDir, destDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,23 +296,81 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 }
 
 func Test_ShouldProcessFiles_WhenTheyAreLocatedInSubfolders(t *testing.T) {
-	srcDir := makeSourceDir(t)
-	destDir := makeDestinationDir(t)
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	for _, m := range testMediaFiles {
+		m.SourceDir = srcDir
+		m.DestinationDir = destDir
+		m.CopyTo(filepath.Join(srcDir, "subfolder"))
+	}
+
+	err := runSilently(t, "app", srcDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range testMediaFiles {
+		err := m.CheckExistsAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
-func TestShouldMoveToSoocDirWhenProcessingJpgMedia(t *testing.T) {
+func Test_ShouldSkip_WhenMediaContentIsSameButNameIsDifferent(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	media := testMediaFiles[0]
+	media.SourceDir = srcDir
+	media.DestinationDir = destDir
+	media.CopyTo(srcDir)
+	media.CopyToExpectedDestination()
+	mediaCopy := *media
+
+	newMediaName := "newname.raf"
+	os.Rename(filepath.Join(media.FullExpectedDestination(), media.Name), filepath.Join(media.FullExpectedDestination(), newMediaName))
+	// TODO: will still pass if it's not moved to expected destination?
+
+	err := runSilently(t, "app", srcDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = media.CheckMissingAt(media.FullExpectedDestination())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mediaCopy.Name = newMediaName
+	err = mediaCopy.CheckExistsAt(mediaCopy.FullExpectedDestination())
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func TestShouldMoveToPhotosDirWhenProcessingJpgOrRafMedia(t *testing.T) {
-}
+func Test_ShouldMove_WhenMediaExistsButIsNotLocatedCorrectly(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
 
-func TestShouldMoveToVideosDirWhenProcessingMovMedia(t *testing.T) {
-}
+	for _, m := range testMediaFiles {
+		m.SourceDir = srcDir
+		m.DestinationDir = destDir
+		m.CopyTo(destDir)
+	}
 
-func TestShouldSkipWhenMediaIsCopyButNameIsDifferent(t *testing.T) {
-}
+	err := runSilently(t, "app", srcDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-func TestShouldMoveWhenMediaExistsButIsNotPlacedCorrectly(t *testing.T) {
+	for _, m := range testMediaFiles {
+		err := m.CheckExistsAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func TestShouldErrorWhenMetadataNotPresent(t *testing.T) {
@@ -307,7 +385,7 @@ func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T)
 	}
 	defer os.RemoveAll(sourceDir)
 
-	err = runWithVolumeKnob(t, true, "app", sourceDir, "notExist")
+	err = runSilently(t, "app", sourceDir, "notExist")
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
 	}
@@ -324,7 +402,7 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 	}
 	defer os.RemoveAll(destDir)
 
-	err = runWithVolumeKnob(t, true, "app", "notExist", destDir)
+	err = runSilently(t, "app", "notExist", destDir)
 	if err == nil {
 		t.Fatalf("expected an error, but got nil")
 	}
@@ -337,7 +415,15 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 // TODO: test dynamic hash chunk using mocking
 // test what happens when unsupported media is present
 
-func runWithVolumeKnob(t *testing.T, silent bool, args ...string) error {
+func runLoudly(t *testing.T, args ...string) error {
+	return runWithVolume(t, false, args...)
+}
+
+func runSilently(t *testing.T, args ...string) error {
+	return runWithVolume(t, true, args...)
+}
+
+func runWithVolume(t *testing.T, silent bool, args ...string) error {
 	if !silent {
 		originalArgs := os.Args
 		os.Args = args
