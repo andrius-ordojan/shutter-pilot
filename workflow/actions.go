@@ -1,10 +1,8 @@
 package workflow
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"log"
 	"os"
 
 	"github.com/andrius-ordojan/shutter-pilot/media"
@@ -23,7 +21,7 @@ const (
 
 type action struct {
 	execute func() (string, error)
-	summery func() (string, error)
+	summery func() string
 	aType   actionType
 }
 
@@ -31,27 +29,20 @@ func newMoveAction(file media.File, destinationDir string) action {
 	return action{
 		aType: move,
 		execute: func() (string, error) {
-			if file.GetPath() == "" {
-				return "", errors.New("media file path not specified")
-			}
-
 			dstPath, err := file.GetDestinationPath(destinationDir)
 			if err != nil {
-				return "", nil
+				return "", err
 			}
 
 			err = os.Rename(file.GetPath(), dstPath)
 			if err != nil {
-				log.Fatalf("error moving file: %v", err)
+				return "", err
 			}
 
 			return fmt.Sprintf("Moving from %s to %s", file.GetPath(), dstPath), nil
 		},
-		summery: func() (string, error) {
-			if file.GetPath() == "" {
-				return "", errors.New("media file path not specified")
-			}
-			return fmt.Sprintf("Move: %s", file.GetPath()), nil
+		summery: func() string {
+			return fmt.Sprintf("Move: %s", file.GetPath())
 		},
 	}
 }
@@ -60,13 +51,6 @@ func newCopyAction(file media.File, destinationDir string) action {
 	return action{
 		aType: copy,
 		execute: func() (string, error) {
-			if file.GetPath() == "" {
-				return "", errors.New("media file path not specified")
-			}
-			if destinationDir == "" {
-				return "", errors.New("destination directory not specified")
-			}
-
 			dstPath, err := file.GetDestinationPath(destinationDir)
 			if err != nil {
 				return "", err
@@ -96,12 +80,8 @@ func newCopyAction(file media.File, destinationDir string) action {
 
 			return fmt.Sprintf("Copying from %s to %s", file.GetPath(), dstPath), nil
 		},
-		summery: func() (string, error) {
-			if file.GetPath() == "" {
-				return "", errors.New("media file path not specified")
-			}
-
-			return fmt.Sprintf("Copy: %s", file.GetPath()), nil
+		summery: func() string {
+			return fmt.Sprintf("Copy: %s", file.GetPath())
 		},
 	}
 }
@@ -110,36 +90,27 @@ func newSkipAction(source, destination media.File) action {
 	return action{
 		aType: skip,
 		execute: func() (string, error) {
-			if source.GetPath() == "" {
-				return "", errors.New("source media path not specified")
-			}
-			if source.GetPath() == "" {
-				return "", errors.New("destination media path not specified")
-			}
-
 			return fmt.Sprintf("Skipping %s", source.GetPath()), nil
 		},
-		summery: func() (string, error) {
-			if source.GetPath() == "" {
-				return "", errors.New("source media path not specified")
-			}
-			if destination.GetPath() == "" {
-				return "", errors.New("destination media path not specified")
-			}
-
-			return fmt.Sprintf("Skip: %s (already exists at %s)", source.GetPath(), destination.GetPath()), nil
+		summery: func() string {
+			return fmt.Sprintf("Skip: %s (already exists at %s)", source.GetPath(), destination.GetPath())
 		},
 	}
 }
 
-func newConflictAction() action {
+func newConflictAction(conflictedFiles []media.File) action {
 	return action{
 		aType: conflict,
 		execute: func() (string, error) {
 			return "conflict", nil
 		},
-		summery: func() (string, error) {
-			return "", nil
+		summery: func() string {
+			firstConflict := conflictedFiles[0].GetPath()
+			var restOfConflicts []string
+			for _, f := range conflictedFiles[1:] {
+				restOfConflicts = append(restOfConflicts, f.GetPath())
+			}
+			return fmt.Sprintf("Conflict: %s (has the same contents as %s)", firstConflict, restOfConflicts)
 		},
 	}
 }

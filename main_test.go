@@ -372,11 +372,51 @@ func Test_ShouldMove_WhenMediaExistsButIsNotLocatedCorrectly(t *testing.T) {
 	}
 }
 
-func Test_ShouldError_WhenDuplicateMediaExistsInDestinations(t *testing.T) {
+func Test_ShouldError_WhenDuplicateMediaExistsInDestination(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	media := testMediaFiles[0]
+	media.SourceDir = srcDir
+	media.DestinationDir = destDir
+	media.CopyTo(destDir)
+	media.CopyTo(srcDir)
+	media.CopyToExpectedDestination()
+
+	newMediaName := "newname.raf"
+	media.CopyTo(filepath.Join(destDir, "2024"))
+	os.Rename(filepath.Join(destDir, "2024", media.Name), filepath.Join(destDir, "2024", newMediaName))
+
+	err := runSilently(t, "app", srcDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = media.CheckExistsAt(media.FullExpectedDestination())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = media.CheckExistsAt(srcDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = media.CheckExistsAt(destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = media.CheckExistsAt(media.FullExpectedDestination())
+	if err != nil {
+		t.Fatal(err)
+	}
+	mediaCopy := *media
+	mediaCopy.Name = newMediaName
+	err = mediaCopy.CheckExistsAt(filepath.Join(destDir, "2024"))
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func Test_ShouldError_WhenDuplicateMediaExistsInSources(t *testing.T) {
-}
+// TODO: address multiple duplicates in source without file in destination present
 
 func TestShouldErrorWhenMetadataNotPresent(t *testing.T) {
 }
@@ -471,7 +511,11 @@ func runWithVolume(t *testing.T, silent bool, args ...string) error {
 	return nil
 }
 
+// TODO: test that checks that dryrun doesn't do anything
+
 // TODO: add tests for move and copy
 //
 //
 // test that existsing files will never be overwritten
+//
+//
