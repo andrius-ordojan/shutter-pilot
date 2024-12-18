@@ -25,7 +25,6 @@ func scanFiles(dirPath string) ([]media.File, error) {
 
 		ext := strings.ToLower(filepath.Ext(path))
 		var m media.File
-
 		switch ext {
 		case ".jpg":
 			m = &media.Jpg{Path: path}
@@ -33,7 +32,6 @@ func scanFiles(dirPath string) ([]media.File, error) {
 			m = &media.Raf{Path: path}
 		case ".mov":
 			m = &media.Mov{Path: path}
-
 		default:
 			return fmt.Errorf("unsupported file: %s", path)
 		}
