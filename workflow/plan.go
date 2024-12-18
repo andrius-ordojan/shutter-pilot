@@ -25,43 +25,49 @@ func (p *Plan) Apply() error {
 	fmt.Println("Applying plan:")
 
 	for _, action := range p.actions {
-		err := action.execute()
+		result, err := action.execute()
 		if err != nil {
-			return fmt.Errorf("error while executing action: %w", err)
+			return nil
 		}
+
+		fmt.Printf("  %s\n", result)
 	}
 
 	fmt.Printf("\n")
 	return nil
 }
 
-func (p *Plan) printSummary() {
+func (p *Plan) printSummary() error {
 	moveCount := 0
 	copyCount := 0
 	skipCount := 0
 
 	fmt.Println("Detailed Actions:")
 	for _, action := range p.actions {
+		summery, err := action.summery()
+		if err != nil {
+			return nil
+		}
+		fmt.Printf("  %s\n", summery)
+
 		switch action.aType {
 		case move:
-			fmt.Printf("  Move: %s\n", action.sourceMedia.GetPath())
 			moveCount++
 		case copy:
-			fmt.Printf("  Copy: %s\n", action.sourceMedia.GetPath())
 			copyCount++
 		case skip:
-			fmt.Printf("  Skip: %s (already exists at %s)\n", action.sourceMedia.GetPath(), action.destinationMedia.GetPath())
 			skipCount++
 		}
 	}
-	fmt.Printf("\n")
 
+	fmt.Printf("\n")
 	fmt.Printf("Plan Summary:\n")
 	fmt.Printf("  Files to move: %d\n", moveCount)
 	fmt.Printf("  Files to copy: %d\n", copyCount)
 	fmt.Printf("  Files skipped: %d\n", skipCount)
-
 	fmt.Printf("\n")
+
+	return nil
 }
 
 func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error) {
@@ -78,56 +84,56 @@ func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error)
 	if err != nil {
 		return Plan{}, fmt.Errorf("error occured while scanning destination directory: %w", err)
 	}
-	destMap := make(map[string]media.File)
+
+	destMap := make(map[string][]media.File)
 	for _, media := range destinationMedia {
-		destMap[media.GetFingerprint()] = media
+		destMap[media.GetFingerprint()] = append(destMap[media.GetFingerprint()], media)
 	}
 
 	plan := Plan{moveMode: moveMode}
 
-	for _, destMedia := range destMap {
+	// checking for conflicts
+	// for _, files := range destMap {
+	// 	if len(files) > 1 {
+	// 		plan.addAction(action{
+	// 			aType: conflict,
+	// 		})
+	// 		fmt.Printf("has %d entries\n", len(files))
+	// 	}
+	// }
+
+	for _, e := range destMap {
+		destMedia := e[0]
+
 		mediaDestPath, err := destMedia.GetDestinationPath(destinationPath)
 		if err != nil {
 			return Plan{}, err
 		}
 
 		if destMedia.GetPath() != mediaDestPath {
-			plan.addAction(action{
-				aType:          move,
-				sourceMedia:    destMedia,
-				destinationDir: destinationPath,
-			})
+			plan.addAction(newMoveAction(destMedia, destinationPath))
 		}
 
 		// TODO: create error for duplicate media
 	}
 
 	for hash, srcMedia := range sourceMap {
-		if destMedia, exists := destMap[hash]; exists {
-			plan.addAction(action{
-				aType:            skip,
-				sourceMedia:      srcMedia,
-				destinationMedia: destMedia,
-				destinationDir:   destinationPath,
-			})
+		if e, exists := destMap[hash]; exists {
+			destMedia := e[0]
+			plan.addAction(newSkipAction(srcMedia, destMedia))
 		} else {
 			if moveMode {
-				plan.addAction(action{
-					aType:          move,
-					sourceMedia:    srcMedia,
-					destinationDir: destinationPath,
-				})
+				plan.addAction(newMoveAction(srcMedia, destinationPath))
 			} else {
-				plan.addAction(action{
-					aType:          copy,
-					sourceMedia:    srcMedia,
-					destinationDir: destinationPath,
-				})
+				plan.addAction(newCopyAction(srcMedia, destinationPath))
 			}
 		}
 	}
 
-	plan.printSummary()
+	err = plan.printSummary()
+	if err != nil {
+		return Plan{}, fmt.Errorf("error occured while printing plan summery: %w", err)
+	}
 
 	return plan, nil
 }
