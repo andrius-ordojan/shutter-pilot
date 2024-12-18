@@ -19,11 +19,11 @@ func (args) Description() string {
 	return "Orginizes photo and video media into lightroom style directory structure"
 }
 
-// TODO: add io writer interface and make function for printing so I can choose where the output is going buf reader or os.stdout
 func run() error {
 	var args args
 	arg.MustParse(&args)
 
+	// BUG: creates directories if in dryrun mode
 	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode)
 	if err != nil {
 		return err
@@ -32,10 +32,11 @@ func run() error {
 	if !args.DryRun {
 		err := plan.Apply()
 		if err != nil {
-			return err
+			return fmt.Errorf("error while executing action: %w", err)
 		}
 	}
 
+	// TODO: print execution time to measure performance
 	return nil
 }
 
