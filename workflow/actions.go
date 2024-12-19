@@ -26,6 +26,13 @@ type action struct {
 }
 
 func newMoveAction(file media.File, destinationDir string) action {
+	if file.GetPath() == "" {
+		panic("path not set for media file")
+	}
+	if destinationDir == "" {
+		panic("destination dir not set")
+	}
+
 	return action{
 		aType: move,
 		execute: func() (string, error) {
@@ -48,6 +55,13 @@ func newMoveAction(file media.File, destinationDir string) action {
 }
 
 func newCopyAction(file media.File, destinationDir string) action {
+	if file.GetPath() == "" {
+		panic("path not set for media file")
+	}
+	if destinationDir == "" {
+		panic("destination dir not set")
+	}
+
 	return action{
 		aType: copy,
 		execute: func() (string, error) {
@@ -87,6 +101,13 @@ func newCopyAction(file media.File, destinationDir string) action {
 }
 
 func newSkipAction(source, destination media.File) action {
+	if source.GetPath() == "" {
+		panic("path not set for source media file")
+	}
+	if destination.GetPath() == "" {
+		panic("path not set for destination media file")
+	}
+
 	return action{
 		aType: skip,
 		execute: func() (string, error) {
@@ -99,6 +120,10 @@ func newSkipAction(source, destination media.File) action {
 }
 
 func newConflictAction(conflictedFiles []media.File) action {
+	if len(conflictedFiles) < 2 {
+		panic("less than 2 files in conflicted files slice")
+	}
+
 	return action{
 		aType: conflict,
 		execute: func() (string, error) {
