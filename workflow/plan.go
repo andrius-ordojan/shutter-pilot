@@ -92,6 +92,8 @@ func (p *Plan) printSummary() error {
 }
 
 func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error) {
+	fmt.Println("building execution plan... (depending on disk used and number of files this might take a while)")
+
 	sourceMedia, err := scanFiles(sourcePath)
 	if err != nil {
 		return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
@@ -105,7 +107,6 @@ func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error)
 	if err != nil {
 		return Plan{}, fmt.Errorf("error occured while scanning destination directory: %w", err)
 	}
-
 	destMap := make(map[string][]media.File)
 	for _, media := range destinationMedia {
 		destMap[media.GetFingerprint()] = append(destMap[media.GetFingerprint()], media)
