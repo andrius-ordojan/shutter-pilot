@@ -34,7 +34,7 @@ func (p *Plan) Apply() error {
 	for _, action := range p.actions {
 		result, err := action.execute()
 		if err != nil {
-			return nil
+			return err
 		}
 
 		fmt.Printf("  %s\n", result)
