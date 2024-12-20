@@ -84,7 +84,7 @@ func (r *Raf) GetDestinationPath(base string) (string, error) {
 			date := creationTime.Format("2006-01-02")
 			year := strconv.Itoa(creationTime.Year())
 
-			mediaHome := filepath.Join(base, string(photos), year, date, "")
+			mediaHome := filepath.Join(base, string(photos), year, date)
 			return filepath.Join(mediaHome, filepath.Base(r.Path)), nil
 		})
 }
