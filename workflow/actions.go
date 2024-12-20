@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
@@ -41,8 +42,9 @@ func newMoveAction(file media.File, destinationDir string) action {
 				return "", err
 			}
 
-			if _, err := os.Stat(dstPath); os.IsNotExist(err) {
-				err := os.MkdirAll(dstPath, os.ModePerm)
+			dstDir := filepath.Dir(dstPath)
+			if _, err := os.Stat(dstDir); os.IsNotExist(err) {
+				err := os.MkdirAll(dstDir, os.ModePerm)
 				if err != nil {
 					return "", err
 				}
@@ -77,8 +79,9 @@ func newCopyAction(file media.File, destinationDir string) action {
 				return "", err
 			}
 
-			if _, err := os.Stat(dstPath); os.IsNotExist(err) {
-				err := os.MkdirAll(dstPath, os.ModePerm)
+			dstDir := filepath.Dir(dstPath)
+			if _, err := os.Stat(dstDir); os.IsNotExist(err) {
+				err := os.MkdirAll(dstDir, os.ModePerm)
 				if err != nil {
 					return "", err
 				}
