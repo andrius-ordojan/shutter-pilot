@@ -54,7 +54,10 @@ func (m *Mov) GetDestinationPath(base string) (string, error) {
 				}
 
 				atomSize := binary.BigEndian.Uint32(buf) // check size of atom
-				file.Seek(int64(atomSize)-8, 1)          // jump over data and set seeker at beginning of next atom
+				if atomSize < 8 {
+					return "", errors.New("invalid atom size")
+				}
+				file.Seek(int64(atomSize)-8, 1) // jump over data and set seeker at beginning of next atom
 			}
 
 			// read next atom
