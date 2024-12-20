@@ -1,7 +1,7 @@
 package media
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -43,7 +43,7 @@ func (j *Jpg) GetDestinationPath(base string) (string, error) {
 
 			creationTime, err := exif.DateTime()
 			if err != nil {
-				log.Fatal(err)
+				return "", fmt.Errorf("failed to get creation time: %w", err)
 			}
 
 			date := creationTime.Format("2006-01-02")
