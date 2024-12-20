@@ -36,7 +36,6 @@ func run() error {
 		}
 	}
 
-	// TODO: print execution time to measure performance
 	return nil
 }
 
@@ -50,3 +49,6 @@ func main() {
 // TODO: create plan before making changes making sure there are no conflicts and create a report with changes this will be either --plan or --dry-run
 // TODO: never overwrite existing files
 // TODO: clean up source dir if it's empty of content
+// TODO: test no metadata jpg and see what happens
+
+// TODO: write detail logs to file to remove some crap from screen
