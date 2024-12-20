@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
@@ -121,22 +122,23 @@ func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error)
 	}
 
 	for _, e := range destMap {
-		destMedia := e[0]
-
-		mediaDestPath, err := destMedia.GetDestinationPath(destinationPath)
+		mediaDestPath, err := e[0].GetDestinationPath(destinationPath)
 		if err != nil {
 			return Plan{}, err
 		}
 
-		if destMedia.GetPath() != mediaDestPath {
-			plan.addAction(newMoveAction(destMedia, destinationPath))
+		if e[0].GetPath() != mediaDestPath {
+			log.Printf("adding action to move %s != %s\n", e[0].GetPath(), mediaDestPath)
+			plan.addAction(newMoveAction(e[0], destinationPath))
+		}
+		if len(plan.actions) > 0 && len(plan.actions)%100 == 0 {
+			fmt.Printf("Progress: %d actions \n", len(plan.actions))
 		}
 	}
 
 	for hash, srcMedia := range sourceMap {
 		if e, exists := destMap[hash]; exists {
-			destMedia := e[0]
-			plan.addAction(newSkipAction(srcMedia, destMedia))
+			plan.addAction(newSkipAction(srcMedia, e[0]))
 		} else {
 			if moveMode {
 				plan.addAction(newMoveAction(srcMedia, destinationPath))
