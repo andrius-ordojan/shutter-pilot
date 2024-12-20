@@ -3,6 +3,7 @@ package media
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -12,8 +13,9 @@ import (
 )
 
 type Raf struct {
-	Path        string
-	Fingerprint string
+	Path            string
+	fingerprint     string
+	destinationPath LazyPath
 
 	Header struct {
 		Magic         [16]byte
@@ -37,8 +39,6 @@ type Raf struct {
 			}
 		}
 	}
-	Jpeg []byte
-	Exif *exif.Exif
 }
 
 func (r *Raf) GetPath() string {
@@ -46,53 +46,54 @@ func (r *Raf) GetPath() string {
 }
 
 func (r *Raf) GetFingerprint() string {
-	return r.Fingerprint
+	return r.fingerprint
 }
 
 func (r *Raf) SetFingerprint(fingerprint string) {
-	r.Fingerprint = fingerprint
+	r.fingerprint = fingerprint
 }
 
 func (r *Raf) GetDestinationPath(base string) (string, error) {
-	f, err := os.Open(r.Path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
+	return r.destinationPath.GetDestinationPath(
+		func() (string, error) {
+			f, err := os.Open(r.Path)
+			if err != nil {
+				return "", err
+			}
+			defer f.Close()
 
-	err = binary.Read(f, binary.BigEndian, &r.Header)
-	if err != nil {
-		return "", err
-	}
+			err = binary.Read(f, binary.BigEndian, &r.Header)
+			if err != nil {
+				return "", fmt.Errorf("failed to read RAF header: %w", err)
+			}
 
-	jbuf := make([]byte, r.Header.Dir.Jpeg.Len)
-	_, err = f.ReadAt(jbuf, int64(r.Header.Dir.Jpeg.Idx))
-	if err != nil {
-		return "", err
-	}
-	r.Jpeg = jbuf
+			jbuf := make([]byte, r.Header.Dir.Jpeg.Len)
+			_, err = f.ReadAt(jbuf, int64(r.Header.Dir.Jpeg.Idx))
+			if err != nil {
+				return "", fmt.Errorf("failed to read JPEG data: %w", err)
+			}
+			exifData, err := exif.Decode(bytes.NewReader(jbuf))
+			if err != nil {
+				return "", fmt.Errorf("failed to decode EXIF data: %w", err)
+			}
 
-	buf := bytes.NewBuffer(jbuf)
-	r.Exif, err = exif.Decode(buf)
-	if err != nil {
-		return "", err
-	}
+			creationTime, err := exifData.DateTime()
+			if err != nil {
+				return "", fmt.Errorf("failed to get creation time: %w", err)
+			}
 
-	creationTime, err := r.Exif.DateTime()
-	if err != nil {
-		log.Fatal(err)
-	}
+			date := creationTime.Format("2006-01-02")
+			year := strconv.Itoa(creationTime.Year())
 
-	date := creationTime.Format("2006-01-02")
-	year := strconv.Itoa(creationTime.Year())
+			mediaHome := filepath.Join(base, string(photos), year, date, "")
+			// TODO: make this return just string and creation of directory is done somewhere else
+			if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
+				err := os.MkdirAll(mediaHome, os.ModePerm)
+				if err != nil {
+					log.Fatalf("Error creating directory: %v", err)
+				}
+			}
 
-	mediaHome := filepath.Join(base, string(photos), year, date, "")
-	if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
-		err := os.MkdirAll(mediaHome, os.ModePerm)
-		if err != nil {
-			log.Fatalf("Error creating directory: %v", err)
-		}
-	}
-
-	return filepath.Join(mediaHome, filepath.Base(r.Path)), nil
+			return filepath.Join(mediaHome, filepath.Base(r.Path)), nil
+		})
 }
