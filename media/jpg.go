@@ -10,9 +10,9 @@ import (
 )
 
 type Jpg struct {
-	Path            string
-	fingerprint     string
-	destinationPath LazyPath
+	Path        string
+	fingerprint string
+	lazy        LazyPath
 }
 
 func (j *Jpg) GetPath() string {
@@ -28,7 +28,7 @@ func (j *Jpg) SetFingerprint(fingerprint string) {
 }
 
 func (j *Jpg) GetDestinationPath(base string) (string, error) {
-	return j.destinationPath.GetDestinationPath(
+	return j.lazy.GetDestinationPath(
 		func() (string, error) {
 			f, err := os.Open(j.Path)
 			if err != nil {

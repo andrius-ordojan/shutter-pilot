@@ -12,9 +12,9 @@ import (
 )
 
 type Raf struct {
-	Path            string
-	fingerprint     string
-	destinationPath LazyPath
+	Path        string
+	fingerprint string
+	lazy        LazyPath
 
 	Header struct {
 		Magic         [16]byte
@@ -53,7 +53,7 @@ func (r *Raf) SetFingerprint(fingerprint string) {
 }
 
 func (r *Raf) GetDestinationPath(base string) (string, error) {
-	return r.destinationPath.GetDestinationPath(
+	return r.lazy.GetDestinationPath(
 		func() (string, error) {
 			f, err := os.Open(r.Path)
 			if err != nil {

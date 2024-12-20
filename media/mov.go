@@ -20,9 +20,9 @@ const (
 )
 
 type Mov struct {
-	Path            string
-	fingerprint     string
-	destinationPath LazyPath
+	Path        string
+	fingerprint string
+	lazy        LazyPath
 }
 
 func (m *Mov) GetPath() string {
@@ -30,7 +30,7 @@ func (m *Mov) GetPath() string {
 }
 
 func (m *Mov) GetDestinationPath(base string) (string, error) {
-	return m.destinationPath.GetDestinationPath(
+	return m.lazy.GetDestinationPath(
 		func() (string, error) {
 			file, err := os.Open(m.Path)
 			if err != nil {
