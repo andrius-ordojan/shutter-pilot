@@ -79,7 +79,7 @@ func (m *Mov) GetDestinationPath(base string) (string, error) {
 				date := creationTime.Format("2006-01-02")
 				year := strconv.Itoa(creationTime.Year())
 
-				mediaHome := filepath.Join(base, string(videos), year, date, "")
+				mediaHome := filepath.Join(base, string(videos), year, date)
 				return filepath.Join(mediaHome, filepath.Base(m.Path)), nil
 			case compressedMovieAtomType:
 				return "", errors.New("compressed video")
