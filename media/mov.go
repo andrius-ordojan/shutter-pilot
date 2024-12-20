@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -81,14 +80,6 @@ func (m *Mov) GetDestinationPath(base string) (string, error) {
 				year := strconv.Itoa(creationTime.Year())
 
 				mediaHome := filepath.Join(base, string(videos), year, date, "")
-				// TODO: make this return just string and creation of directory is done somewhere else
-				if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
-					err := os.MkdirAll(mediaHome, os.ModePerm)
-					if err != nil {
-						log.Fatalf("Error creating directory: %v", err)
-					}
-				}
-
 				return filepath.Join(mediaHome, filepath.Base(m.Path)), nil
 			case compressedMovieAtomType:
 				return "", errors.New("compressed video")

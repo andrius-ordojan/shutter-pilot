@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -86,14 +85,6 @@ func (r *Raf) GetDestinationPath(base string) (string, error) {
 			year := strconv.Itoa(creationTime.Year())
 
 			mediaHome := filepath.Join(base, string(photos), year, date, "")
-			// TODO: make this return just string and creation of directory is done somewhere else
-			if _, err := os.Stat(mediaHome); os.IsNotExist(err) {
-				err := os.MkdirAll(mediaHome, os.ModePerm)
-				if err != nil {
-					log.Fatalf("Error creating directory: %v", err)
-				}
-			}
-
 			return filepath.Join(mediaHome, filepath.Base(r.Path)), nil
 		})
 }

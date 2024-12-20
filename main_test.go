@@ -416,12 +416,10 @@ func Test_ShouldError_WhenDuplicateMediaExistsInDestination(t *testing.T) {
 	}
 }
 
-// TODO: address multiple duplicates in source without file in destination present
-
-func TestShouldErrorWhenMetadataNotPresent(t *testing.T) {
+func Test_ShouldError_WhenMetadataNotPresent(t *testing.T) {
 }
 
-// should error or conflict when media with same name already exists but the hash doesn't match
+// TODO: should error or conflict when media with same name already exists but the hash doesn't match
 
 func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T) {
 	sourceDir, err := os.MkdirTemp(".", "tmptest")
@@ -519,3 +517,5 @@ func runWithVolume(t *testing.T, silent bool, args ...string) error {
 // test that existsing files will never be overwritten
 //
 //
+//
+// TODO: make a high volume test for memory issues

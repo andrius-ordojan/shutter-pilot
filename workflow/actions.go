@@ -41,6 +41,13 @@ func newMoveAction(file media.File, destinationDir string) action {
 				return "", err
 			}
 
+			if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+				err := os.MkdirAll(dstPath, os.ModePerm)
+				if err != nil {
+					return "", err
+				}
+			}
+
 			err = os.Rename(file.GetPath(), dstPath)
 			if err != nil {
 				return "", err
@@ -68,6 +75,13 @@ func newCopyAction(file media.File, destinationDir string) action {
 			dstPath, err := file.GetDestinationPath(destinationDir)
 			if err != nil {
 				return "", err
+			}
+
+			if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+				err := os.MkdirAll(dstPath, os.ModePerm)
+				if err != nil {
+					return "", err
+				}
 			}
 
 			sourceFile, err := os.Open(file.GetPath())
