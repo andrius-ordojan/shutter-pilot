@@ -372,7 +372,7 @@ func Test_ShouldMove_WhenMediaExistsButIsNotLocatedCorrectly(t *testing.T) {
 	}
 }
 
-func Test_ShouldError_WhenDuplicateMediaExistsInDestination(t *testing.T) {
+func Test_ShouldConflict_WhenDuplicateMediaExistsInDestination(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
 
