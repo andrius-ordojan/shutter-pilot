@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
@@ -128,11 +127,7 @@ func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error)
 		}
 
 		if e[0].GetPath() != mediaDestPath {
-			log.Printf("adding action to move %s != %s\n", e[0].GetPath(), mediaDestPath)
 			plan.addAction(newMoveAction(e[0], destinationPath))
-		}
-		if len(plan.actions) > 0 && len(plan.actions)%100 == 0 {
-			fmt.Printf("Progress: %d actions \n", len(plan.actions))
 		}
 	}
 
