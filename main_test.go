@@ -153,6 +153,57 @@ func makeDestinationDir(t *testing.T, cleanup bool) string {
 	return destDir
 }
 
+func runLoudly(t *testing.T, args ...string) error {
+	return runWithVolume(t, false, args...)
+}
+
+func runSilently(t *testing.T, args ...string) error {
+	return runWithVolume(t, true, args...)
+}
+
+func runWithVolume(t *testing.T, silent bool, args ...string) error {
+	if !silent {
+		originalArgs := os.Args
+		os.Args = args
+		t.Cleanup(func() {
+			os.Args = originalArgs
+		})
+
+		err := run()
+		if err != nil {
+			return err
+		}
+	} else {
+		originalStdout := os.Stdout
+		originalStderr := os.Stderr
+
+		devNull, err := os.Open(os.DevNull)
+		if err != nil {
+			panic("failed to open /dev/null")
+		}
+		defer devNull.Close()
+
+		os.Stdout = devNull
+		os.Stderr = devNull
+
+		defer func() {
+			os.Stdout = originalStdout
+			os.Stderr = originalStderr
+		}()
+
+		originalArgs := os.Args
+		os.Args = args
+		t.Cleanup(func() {
+			os.Args = originalArgs
+		})
+		err = run()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
@@ -186,7 +237,6 @@ func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
 
-	// TODO: make a function to help with skipping some numebr of media
 	jpgCount := 0
 	rafCount := 0
 	movCount := 0
@@ -238,7 +288,6 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
 
-	// TODO: make a function to help with skipping some numebr of media
 	var shouldBeMissing []TestMediaFile
 	jpgCount := 0
 	rafCount := 0
@@ -416,11 +465,6 @@ func Test_ShouldConflict_WhenDuplicateMediaExistsInDestination(t *testing.T) {
 	}
 }
 
-func Test_ShouldError_WhenMetadataNotPresent(t *testing.T) {
-}
-
-// TODO: should error or conflict when media with same name already exists but the hash doesn't match
-
 func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T) {
 	sourceDir, err := os.MkdirTemp(".", "tmptest")
 	if err != nil {
@@ -455,67 +499,14 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 	}
 }
 
-// TODO: test dynamic hash chunk using mocking
-// test what happens when unsupported media is present
-
-func runLoudly(t *testing.T, args ...string) error {
-	return runWithVolume(t, false, args...)
+func Test_ShouldNotMakeChanges_WhenDryrunIsOn(t *testing.T) {
 }
 
-func runSilently(t *testing.T, args ...string) error {
-	return runWithVolume(t, true, args...)
+func Test_ShouldError_WhenMetadataNotPresent(t *testing.T) {
 }
 
-func runWithVolume(t *testing.T, silent bool, args ...string) error {
-	if !silent {
-		originalArgs := os.Args
-		os.Args = args
-		t.Cleanup(func() {
-			os.Args = originalArgs
-		})
-
-		err := run()
-		if err != nil {
-			return err
-		}
-	} else {
-		originalStdout := os.Stdout
-		originalStderr := os.Stderr
-
-		devNull, err := os.Open(os.DevNull)
-		if err != nil {
-			panic("failed to open /dev/null")
-		}
-		defer devNull.Close()
-
-		os.Stdout = devNull
-		os.Stderr = devNull
-
-		defer func() {
-			os.Stdout = originalStdout
-			os.Stderr = originalStderr
-		}()
-
-		originalArgs := os.Args
-		os.Args = args
-		t.Cleanup(func() {
-			os.Args = originalArgs
-		})
-		err = run()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInSourceOrDestination(t *testing.T) {
 }
 
-// TODO: test that checks that dryrun doesn't do anything
-
-// TODO: add tests for move and copy
-//
-//
-// test that existsing files will never be overwritten
-//
-//
-//
-// TODO: make a high volume test for memory issues
+func Test_ShouldCopyCertainFiletypes_WhenFilterIsSelected(t *testing.T) {
+}
