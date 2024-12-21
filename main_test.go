@@ -500,13 +500,41 @@ func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 }
 
 func Test_ShouldNotMakeChanges_WhenDryrunIsOn(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	for _, m := range testMediaFiles {
+		m.SourceDir = srcDir
+		m.DestinationDir = destDir
+		m.CopyTo(srcDir)
+	}
+
+	err := runLoudly(t, "app", "--dryrun", srcDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range testMediaFiles {
+		err := m.CheckMissingAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = m.CheckExistsAt(m.SourceDir)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func Test_ShouldError_WhenMetadataNotPresent(t *testing.T) {
+	t.Fatal("not implemented")
 }
 
 func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInSourceOrDestination(t *testing.T) {
+	t.Fatal("not implemented")
 }
 
 func Test_ShouldCopyCertainFiletypes_WhenFilterIsSelected(t *testing.T) {
+	t.Fatal("not implemented")
 }
