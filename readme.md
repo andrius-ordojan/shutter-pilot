@@ -27,3 +27,9 @@ mediaarrangelr [--dryrun] SOURCE DESTINATION
 ```
 
 Setting `dryrun` will not run any changes on the file system.
+
+## TODO
+
+- [ ] Finish implementing all tests
+- [ ] add filter feature to limit the run to certain filetypes
+- [ ] add option to skip sooc for jpg
