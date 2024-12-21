@@ -33,3 +33,6 @@ Setting `dryrun` will not run any changes on the file system.
 - [ ] Finish implementing all tests
 - [ ] add filter feature to limit the run to certain filetypes
 - [ ] add option to skip sooc for jpg
+- [ ] rewrite the github page summery and the readme
+- [ ] release new version
+- [ ] post on reddit
