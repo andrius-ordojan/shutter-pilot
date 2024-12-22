@@ -38,7 +38,9 @@ func (j *Jpg) GetDestinationPath(base string) (string, error) {
 
 			exif, err := exif.Decode(f)
 			if err != nil {
-				return "", err
+				// TODO: improve error message that gets printed to user
+				// maybe make custom error for failed metadata extraction and add that here like chatgpt suggested
+				return "", fmt.Errorf("failed to decode exif data: %w", err)
 			}
 
 			creationTime, err := exif.DateTime()
