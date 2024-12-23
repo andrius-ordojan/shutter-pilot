@@ -42,6 +42,7 @@ func scanFiles(dirPath string) ([]media.File, error) {
 		}
 
 		m.SetFingerprint(hash)
+
 		results = append(results, m)
 
 		return nil
