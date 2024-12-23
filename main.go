@@ -8,6 +8,7 @@ import (
 	"github.com/andrius-ordojan/shutter-pilot/workflow"
 )
 
+// TODO: change cli so I can have multiple sources and the last param will be destination ex: app source source dest
 type args struct {
 	Source      string `arg:"positional,required" help:"source directory for media"`
 	Destination string `arg:"positional,required" help:"destination directory for orginised media"`
@@ -31,7 +32,7 @@ func run() error {
 	if !args.DryRun {
 		err := plan.Apply()
 		if err != nil {
-			return fmt.Errorf("error while executing action: %w", err)
+			return fmt.Errorf("error while applying plan: %w", err)
 		}
 	}
 
