@@ -630,5 +630,5 @@ func Test_ShouldCopyCertainFiletypes_WhenFilterIsSelected(t *testing.T) {
 	t.Fatal("not implemented")
 }
 
-// no subfolder setting test
-// test multiple sources
+// TODO:no subfolder setting test
+// TODO: test multiple sources
