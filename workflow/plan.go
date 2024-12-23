@@ -49,31 +49,33 @@ func (p *Plan) printSummary() error {
 	copyCount := 0
 	skipCount := 0
 	conflictCount := 0
+	var skippedSummeries string
+	var copySummeries string
+	var moveSummeries string
+	var conflictSummeries string
 
 	fmt.Println("Detailed Actions:")
-	var actionSummeries string
-	var conflictSummeries string
 	for _, action := range p.actions {
 		summery := action.summery()
 
-		if action.aType == conflict {
-			conflictSummeries += fmt.Sprintf("  %s\n", summery)
-		} else {
-			actionSummeries += fmt.Sprintf("  %s\n", summery)
-		}
-
 		switch action.aType {
 		case move:
+			moveSummeries += fmt.Sprintf("  %s\n", summery)
 			moveCount++
 		case copy:
+			copySummeries += fmt.Sprintf("  %s\n", summery)
 			copyCount++
 		case skip:
+			skippedSummeries += fmt.Sprintf("  %s\n", summery)
 			skipCount++
 		case conflict:
+			conflictSummeries += fmt.Sprintf("  %s\n", summery)
 			conflictCount++
 		}
 	}
-	fmt.Print(actionSummeries)
+	fmt.Print(skippedSummeries)
+	fmt.Print(copySummeries)
+	fmt.Print(moveSummeries)
 	fmt.Print(conflictSummeries)
 
 	fmt.Printf("\n")
@@ -123,7 +125,7 @@ func CreatePlan(sourcePath, destinationPath string, moveMode bool) (Plan, error)
 	for _, e := range destMap {
 		mediaDestPath, err := e[0].GetDestinationPath(destinationPath)
 		if err != nil {
-			return Plan{}, err
+			return Plan{}, fmt.Errorf("%s %w", e[0].GetPath(), err)
 		}
 
 		if e[0].GetPath() != mediaDestPath {
