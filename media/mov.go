@@ -72,8 +72,12 @@ func (m *Mov) GetDestinationPath(base string) (string, error) {
 					return "", err
 				}
 
+				creationTimeValue := binary.BigEndian.Uint32(buf[4:])
+				if creationTimeValue == 0 {
+					return "", errors.New("creation time not set in metadata")
+				}
 				// byte 1 is version, byte 2-4 is flags, 5-8 Creation time
-				appleEpoch := int64(binary.BigEndian.Uint32(buf[4:])) // Read creation time
+				appleEpoch := int64(creationTimeValue) // Read creation time
 
 				creationTime := time.Unix(appleEpoch-appleEpochAdjustment, 0).Local()
 				date := creationTime.Format("2006-01-02")

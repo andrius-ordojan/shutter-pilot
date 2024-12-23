@@ -76,7 +76,7 @@ func newCopyAction(file media.File, destinationDir string) action {
 		execute: func() (string, error) {
 			dstPath, err := file.GetDestinationPath(destinationDir)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("failed to get destination path: %w", err)
 			}
 
 			dstDir := filepath.Dir(dstPath)

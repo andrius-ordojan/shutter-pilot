@@ -3,7 +3,9 @@ package media
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -73,7 +75,11 @@ func (r *Raf) GetDestinationPath(base string) (string, error) {
 			}
 			exifData, err := exif.Decode(bytes.NewReader(jbuf))
 			if err != nil {
-				return "", fmt.Errorf("failed to decode EXIF data: %w", err)
+				if errors.Is(err, io.EOF) {
+					return "", errors.New("exif data not found")
+				} else {
+					return "", fmt.Errorf("failed to decode exif data: %w", err)
+				}
 			}
 
 			creationTime, err := exifData.DateTime()
