@@ -25,6 +25,7 @@ type TestMediaFile struct {
 	SourceDir           string
 	DestinationDir      string
 	ExpectedDestination string
+	isValid             bool
 }
 
 func (m *TestMediaFile) CopyTo(destination string) error {
@@ -104,11 +105,35 @@ func (m *TestMediaFile) CheckMissingAt(path string) error {
 }
 
 var testMediaFiles = []*TestMediaFile{
-	{Name: "DSCF9533.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-12-07"},
-	{Name: "DSCF9533.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-12-07/sooc"},
-	{Name: "DSCF3517.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-11-13/sooc"},
-	{Name: "DSCF3517.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-11-13"},
-	{Name: "DSCF9531.MOV", Type: MovFile, ExpectedDestination: "videos/2024/2024-12-07"},
+	{Name: "DSCF9533.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-12-07", isValid: true},
+	{Name: "DSCF9533.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-12-07/sooc", isValid: true},
+	{Name: "DSCF3517.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-11-13/sooc", isValid: true},
+	{Name: "DSCF3517.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-11-13", isValid: true},
+	{Name: "DSCF9531.MOV", Type: MovFile, ExpectedDestination: "videos/2024/2024-12-07", isValid: true},
+	{Name: "nometadata.mov", Type: MovFile, isValid: false},
+	{Name: "nometadata.jpg", Type: JpgFile, isValid: false},
+}
+
+func validTestMediaFiles() []*TestMediaFile {
+	res := make([]*TestMediaFile, 0, len(testMediaFiles))
+	for _, e := range testMediaFiles {
+		if !e.isValid {
+			continue
+		}
+		res = append(res, e)
+	}
+	return res
+}
+
+func invalidTestMediaFiles() []*TestMediaFile {
+	res := make([]*TestMediaFile, 0, len(testMediaFiles))
+	for _, e := range testMediaFiles {
+		if e.isValid {
+			continue
+		}
+		res = append(res, e)
+	}
+	return res
 }
 
 func makeSourceDirWithOutCleanup(t *testing.T) string {
@@ -208,7 +233,7 @@ func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		m.SourceDir = srcDir
 		m.DestinationDir = destDir
 		m.CopyTo(srcDir)
@@ -220,7 +245,7 @@ func Test_ShouldSkip_WhenMediaExists(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		err := m.CheckExistsAt(m.FullExpectedDestination())
 		if err != nil {
 			t.Fatal(err)
@@ -240,7 +265,7 @@ func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 	jpgCount := 0
 	rafCount := 0
 	movCount := 0
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		m.SourceDir = srcDir
 		m.DestinationDir = destDir
 		m.CopyTo(srcDir)
@@ -271,7 +296,7 @@ func Test_ShouldCopy_WhenMediaDoesNotExist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		err := m.CheckExistsAt(m.FullExpectedDestination())
 		if err != nil {
 			t.Fatal(err)
@@ -292,7 +317,7 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 	jpgCount := 0
 	rafCount := 0
 	movCount := 0
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		m.SourceDir = srcDir
 		m.DestinationDir = destDir
 		m.CopyTo(srcDir)
@@ -329,7 +354,7 @@ func Test_ShouldMove_WhenMediaDoesNotExist(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		err := m.CheckExistsAt(m.FullExpectedDestination())
 		if err != nil {
 			t.Fatal(err)
@@ -348,7 +373,7 @@ func Test_ShouldProcessFiles_WhenTheyAreLocatedInSubfolders(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		m.SourceDir = srcDir
 		m.DestinationDir = destDir
 		m.CopyTo(filepath.Join(srcDir, "subfolder"))
@@ -359,7 +384,7 @@ func Test_ShouldProcessFiles_WhenTheyAreLocatedInSubfolders(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		err := m.CheckExistsAt(m.FullExpectedDestination())
 		if err != nil {
 			t.Fatal(err)
@@ -402,7 +427,7 @@ func Test_ShouldMove_WhenMediaExistsButIsNotLocatedCorrectly(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		m.SourceDir = srcDir
 		m.DestinationDir = destDir
 		m.CopyTo(destDir)
@@ -413,7 +438,7 @@ func Test_ShouldMove_WhenMediaExistsButIsNotLocatedCorrectly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		err := m.CheckExistsAt(m.FullExpectedDestination())
 		if err != nil {
 			t.Fatal(err)
@@ -503,18 +528,18 @@ func Test_ShouldNotMakeChanges_WhenDryrunIsOn(t *testing.T) {
 	srcDir := makeSourceDirWithCleanup(t)
 	destDir := makeDestinationDirWithCleanup(t)
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		m.SourceDir = srcDir
 		m.DestinationDir = destDir
 		m.CopyTo(srcDir)
 	}
 
-	err := runLoudly(t, "app", "--dryrun", srcDir, destDir)
+	err := runSilently(t, "app", "--dryrun", srcDir, destDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	for _, m := range testMediaFiles {
+	for _, m := range validTestMediaFiles() {
 		err := m.CheckMissingAt(m.FullExpectedDestination())
 		if err != nil {
 			t.Fatal(err)
@@ -527,8 +552,42 @@ func Test_ShouldNotMakeChanges_WhenDryrunIsOn(t *testing.T) {
 	}
 }
 
-func Test_ShouldError_WhenMetadataNotPresent(t *testing.T) {
-	t.Fatal("not implemented")
+func Test_ShouldError_WhenMetadataNotPresentInPhoto(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	for _, m := range invalidTestMediaFiles() {
+		if m.Type != JpgFile {
+			continue
+		}
+		m.SourceDir = srcDir
+		m.DestinationDir = destDir
+		m.CopyTo(srcDir)
+	}
+
+	err := runSilently(t, "app", srcDir, destDir)
+	if err == nil {
+		t.Fatal("execution shuold fail because exif data does not exist")
+	}
+}
+
+func Test_ShouldError_WhenMetadataNotPresentInVideo(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	for _, m := range invalidTestMediaFiles() {
+		if m.Type != MovFile {
+			continue
+		}
+		m.SourceDir = srcDir
+		m.DestinationDir = destDir
+		m.CopyTo(srcDir)
+	}
+
+	err := runSilently(t, "app", srcDir, destDir)
+	if err == nil {
+		t.Fatal("execution shuold fail because exif data does not exist")
+	}
 }
 
 func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInSourceOrDestination(t *testing.T) {
