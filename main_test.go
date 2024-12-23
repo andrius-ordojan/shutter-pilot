@@ -631,3 +631,4 @@ func Test_ShouldCopyCertainFiletypes_WhenFilterIsSelected(t *testing.T) {
 }
 
 // no subfolder setting test
+// test multiple sources
