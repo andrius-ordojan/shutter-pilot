@@ -110,8 +110,8 @@ var testMediaFiles = []*TestMediaFile{
 	{Name: "DSCF3517.JPG", Type: JpgFile, ExpectedDestination: "photos/2024/2024-11-13/sooc", isValid: true},
 	{Name: "DSCF3517.RAF", Type: RafFile, ExpectedDestination: "photos/2024/2024-11-13", isValid: true},
 	{Name: "DSCF9531.MOV", Type: MovFile, ExpectedDestination: "videos/2024/2024-12-07", isValid: true},
-	{Name: "nometadata.mov", Type: MovFile, isValid: false},
-	{Name: "nometadata.jpg", Type: JpgFile, isValid: false},
+	{Name: "nometadata.MOV", Type: MovFile, isValid: false},
+	{Name: "nometadata.JPG", Type: JpgFile, isValid: false},
 }
 
 func validTestMediaFiles() []*TestMediaFile {
@@ -586,14 +586,48 @@ func Test_ShouldError_WhenMetadataNotPresentInVideo(t *testing.T) {
 
 	err := runSilently(t, "app", srcDir, destDir)
 	if err == nil {
-		t.Fatal("execution shuold fail because exif data does not exist")
+		t.Fatal("execution shuold fail because metadata does not exist")
 	}
 }
 
-func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInSourceOrDestination(t *testing.T) {
-	t.Fatal("not implemented")
+func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInSource(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	media := testMediaFiles[0]
+	media.SourceDir = srcDir
+	media.DestinationDir = destDir
+	media.CopyTo(srcDir)
+
+	newMediaName := "newname.png"
+	os.Rename(filepath.Join(srcDir, media.Name), filepath.Join(srcDir, newMediaName))
+
+	err := runSilently(t, "app", srcDir, destDir)
+	if err == nil {
+		t.Fatal("execution shuold fail because filetype is unsupported")
+	}
+}
+
+func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInDestination(t *testing.T) {
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	media := testMediaFiles[0]
+	media.SourceDir = srcDir
+	media.DestinationDir = destDir
+	media.CopyTo(destDir)
+
+	newMediaName := "newname.png"
+	os.Rename(filepath.Join(destDir, media.Name), filepath.Join(destDir, newMediaName))
+
+	err := runSilently(t, "app", srcDir, destDir)
+	if err == nil {
+		t.Fatal("execution shuold fail because filetype is unsupported")
+	}
 }
 
 func Test_ShouldCopyCertainFiletypes_WhenFilterIsSelected(t *testing.T) {
 	t.Fatal("not implemented")
 }
+
+// no subfolder setting test
