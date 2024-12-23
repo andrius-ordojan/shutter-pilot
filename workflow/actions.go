@@ -39,7 +39,7 @@ func newMoveAction(file media.File, destinationDir string) action {
 		execute: func() (string, error) {
 			dstPath, err := file.GetDestinationPath(destinationDir)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("%s %w", file.GetPath(), err)
 			}
 
 			dstDir := filepath.Dir(dstPath)
@@ -76,7 +76,7 @@ func newCopyAction(file media.File, destinationDir string) action {
 		execute: func() (string, error) {
 			dstPath, err := file.GetDestinationPath(destinationDir)
 			if err != nil {
-				return "", fmt.Errorf("failed to get destination path: %w", err)
+				return "", fmt.Errorf("%s %w", file.GetPath(), err)
 			}
 
 			dstDir := filepath.Dir(dstPath)
