@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -590,45 +591,254 @@ func Test_ShouldError_WhenMetadataNotPresentInVideo(t *testing.T) {
 	}
 }
 
-func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInSource(t *testing.T) {
-	srcDir := makeSourceDirWithCleanup(t)
-	destDir := makeDestinationDirWithCleanup(t)
-
-	media := testMediaFiles[0]
-	media.SourceDir = srcDir
-	media.DestinationDir = destDir
-	media.CopyTo(srcDir)
-
-	newMediaName := "newname.png"
-	os.Rename(filepath.Join(srcDir, media.Name), filepath.Join(srcDir, newMediaName))
-
-	err := runSilently(t, "app", srcDir, destDir)
-	if err == nil {
-		t.Fatal("execution shuold fail because filetype is unsupported")
-	}
-}
-
-func Test_ShouldIgnore_unsupportedFiles_WhenTheyArePresentInDestination(t *testing.T) {
-	srcDir := makeSourceDirWithCleanup(t)
-	destDir := makeDestinationDirWithCleanup(t)
-
-	media := testMediaFiles[0]
-	media.SourceDir = srcDir
-	media.DestinationDir = destDir
-	media.CopyTo(destDir)
-
-	newMediaName := "newname.png"
-	os.Rename(filepath.Join(destDir, media.Name), filepath.Join(destDir, newMediaName))
-
-	err := runSilently(t, "app", srcDir, destDir)
-	if err == nil {
-		t.Fatal("execution shuold fail because filetype is unsupported")
-	}
-}
-
 func Test_ShouldCopyCertainFiletypes_WhenFilterIsSelected(t *testing.T) {
-	t.Fatal("not implemented")
+	srcDir := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	for _, m := range validTestMediaFiles() {
+		m.SourceDir = srcDir
+		m.DestinationDir = destDir
+		m.CopyTo(srcDir)
+	}
+
+	err := runSilently(t, "app", "-f", "jpg", srcDir, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range validTestMediaFiles() {
+		if m.Type == JpgFile {
+			err := m.CheckExistsAt(m.FullExpectedDestination())
+			if err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			err := m.CheckMissingAt(m.FullExpectedDestination())
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
 }
 
 // TODO:no subfolder setting test
 // TODO: test multiple sources
+
+func TestParseFileTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		want      []string
+		expectErr bool
+	}{
+		{
+			name:      "Single file type",
+			input:     "jpg",
+			want:      []string{"jpg"},
+			expectErr: false,
+		},
+		{
+			name:      "Multiple file types without spaces",
+			input:     "jpg,mov",
+			want:      []string{"jpg", "mov"},
+			expectErr: false,
+		},
+		{
+			name:      "Multiple file types with spaces",
+			input:     "jpg, mov, raf",
+			want:      []string{"jpg", "mov", "raf"},
+			expectErr: false,
+		},
+		{
+			name:      "Trailing comma",
+			input:     "jpg,mov,",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Consecutive commas",
+			input:     "jpg,,mov",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Empty string",
+			input:     "",
+			want:      []string{},
+			expectErr: true,
+		},
+		{
+			name:      "Only commas",
+			input:     ",,,",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Spaces only",
+			input:     "   ",
+			want:      []string{},
+			expectErr: true,
+		},
+		{
+			name:      "Spaces around commas",
+			input:     " jpg , mov ",
+			want:      []string{"jpg", "mov"},
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseFileTypes(tt.input)
+			if (err != nil) != tt.expectErr {
+				t.Errorf("parseFileTypes() error = %v, expectErr %v", err, tt.expectErr)
+				return
+			}
+			if !equalSlices(got, tt.want) {
+				t.Errorf("parseFileTypes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsValidFileType(t *testing.T) {
+	tests := []struct {
+		name string
+		ft   string
+		want bool
+	}{
+		{"Valid lowercase jpg", "jpg", true},
+		{"Valid lowercase mov", "mov", true},
+		{"Valid lowercase raf", "raf", true},
+		{"Valid uppercase JPG", "JPG", true},
+		{"Valid mixed case Mov", "Mov", true},
+		{"Invalid file type png", "png", false},
+		{"Empty string", "", false},
+		{"Whitespace", " ", false},
+		{"Special characters", "jpg!", false},
+		{"Numeric", "123", false},
+		{"Partial match", "jp", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isValidFileType(tt.ft)
+			if got != tt.want {
+				t.Errorf("isValidFileType(%q) = %v, want %v", tt.ft, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValidateFileTypes(t *testing.T) {
+	tests := []struct {
+		name      string
+		filter    string
+		want      []string
+		expectErr bool
+	}{
+		{
+			name:      "No filter provided",
+			filter:    "",
+			want:      allowedFileTypes,
+			expectErr: false,
+		},
+		{
+			name:      "Valid single file type",
+			filter:    "jpg",
+			want:      []string{"jpg"},
+			expectErr: false,
+		},
+		{
+			name:      "Valid multiple file types",
+			filter:    "jpg,mov",
+			want:      []string{"jpg", "mov"},
+			expectErr: false,
+		},
+		{
+			name:      "Valid multiple file types with spaces",
+			filter:    "jpg, mov, raf",
+			want:      []string{"jpg", "mov", "raf"},
+			expectErr: false,
+		},
+		{
+			name:      "Invalid single file type",
+			filter:    "png",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Invalid multiple file types",
+			filter:    "jpg,png",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Trailing comma",
+			filter:    "jpg,mov,",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Consecutive commas",
+			filter:    "jpg,,mov",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Empty string after trimming",
+			filter:    "   ",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Mixed valid and invalid",
+			filter:    "jpg,invalid,raf",
+			want:      nil,
+			expectErr: true,
+		},
+		{
+			name:      "Case insensitivity",
+			filter:    "JPG,Mov",
+			want:      []string{"JPG", "Mov"},
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ValidateFileTypes(tt.filter)
+			if (err != nil) != tt.expectErr {
+				t.Errorf("ValidateFileTypes() error = %v, expectErr %v", err, tt.expectErr)
+				return
+			}
+			if !equalSlicesIgnoreCase(got, tt.want) {
+				t.Errorf("ValidateFileTypes() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func equalSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalSlicesIgnoreCase(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if !strings.EqualFold(v, b[i]) {
+			return false
+		}
+	}
+	return true
+}

@@ -6,12 +6,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
 
-func scanFiles(dirPath string) ([]media.File, error) {
+func scanFiles(dirPath string, filter []string) ([]media.File, error) {
 	var results []media.File
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -24,6 +25,12 @@ func scanFiles(dirPath string) ([]media.File, error) {
 		}
 
 		ext := strings.ToLower(filepath.Ext(path))
+
+		filetype := strings.TrimPrefix(ext, ".")
+		if !slices.Contains(filter, filetype) {
+			return nil
+		}
+
 		var m media.File
 		switch ext {
 		case ".jpg":

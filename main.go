@@ -16,28 +16,70 @@ var allowedFileTypes = []string{"jpg", "raf", "mov"}
 type args struct {
 	Source      string `arg:"positional,required" help:"source directory for media"`
 	Destination string `arg:"positional,required" help:"destination directory for orginised media"`
-	FileTypes   string `arg:"-f,--filter" help:"Filter by file types (allowed: jpg, raf, mov). Can be specified multiple times."`
+	Filter      string `arg:"-f,--filter" help:"Filter by file types (allowed: jpg, raf, mov). Provide as a comma-separated list, e.g., -f jpg,mov"`
 	MoveMode    bool   `arg:"-m,--move" default:"false" help:"moves files instead of copying"`
 	DryRun      bool   `arg:"-d,--dryrun" default:"false" help:"does not modify file system"`
+	// TODO: add option to disable jpg sooc subpath
 }
 
 func (args) Description() string {
 	return "Orginizes photo and video media into lightroom style directory structure"
 }
 
+func parseFileTypes(input string) ([]string, error) {
+	parts := strings.Split(input, ",")
+
+	fileTypes := make([]string, 0, len(allowedFileTypes))
+	for i, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			return nil, fmt.Errorf("empty file type detected at position %d", i+1)
+		}
+		fileTypes = append(fileTypes, trimmed)
+	}
+
+	return fileTypes, nil
+}
+
+func isValidFileType(ft string) bool {
+	ft = strings.ToLower(ft)
+	for _, allowed := range allowedFileTypes {
+		if ft == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func ValidateFileTypes(filter string) ([]string, error) {
+	if filter == "" {
+		return allowedFileTypes, nil
+	}
+
+	parsedFileTypes, err := parseFileTypes(filter)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ft := range parsedFileTypes {
+		if !isValidFileType(ft) {
+			return nil, fmt.Errorf("invalid file type: %s. Allowed types are: %s", ft, strings.Join(allowedFileTypes, ", "))
+		}
+	}
+
+	return parsedFileTypes, nil
+}
+
 func run() error {
 	var args args
-	arg.MustParse(&args)
+	parser := arg.MustParse(&args)
 
-	fmt.Println(args.FileTypes)
-	// for _, ft := range args.FileTypes {
-	// 	if !isValidFileType(ft) {
-	// 		parser.Fail(fmt.Sprintf("Invalid file type: %s. Allowed types are: %s", ft, strings.Join(allowedFileTypes, ", ")))
-	// 	}
-	// }
-	// fmt.Printf("Filtering by file types: %s\n", strings.Join(args.FileTypes, ", "))
-	os.Exit(1)
-	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode)
+	filterByFiletypes, err := ValidateFileTypes(args.Filter)
+	if err != nil {
+		parser.Fail(err.Error())
+	}
+
+	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode, filterByFiletypes)
 	if err != nil {
 		return err
 	}
@@ -57,14 +99,4 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-}
-
-func isValidFileType(ft string) bool {
-	ft = strings.ToLower(ft)
-	for _, allowed := range allowedFileTypes {
-		if ft == allowed {
-			return true
-		}
-	}
-	return false
 }
