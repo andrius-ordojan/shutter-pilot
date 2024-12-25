@@ -18,8 +18,7 @@ type args struct {
 	Filter      string `arg:"-f,--filter" help:"Filter by file types (allowed: jpg, raf, mov). Provide as a comma-separated list, e.g., -f jpg,mov"`
 	MoveMode    bool   `arg:"-m,--move" default:"false" help:"moves files instead of copying"`
 	DryRun      bool   `arg:"-d,--dryrun" default:"false" help:"does not modify file system"`
-	noSooc      bool   `arg:"-s,--nosooc" default:"false" help:"Does no place jpg photos under sooc directory, but next to raw files"`
-	// TODO: add option to disable jpg sooc subpath
+	NoSooc      bool   `arg:"-s,--nosooc" default:"false" help:"Does no place jpg photos under sooc directory, but next to raw files"`
 }
 
 func (args) Description() string {
@@ -79,7 +78,7 @@ func run() error {
 		parser.Fail(err.Error())
 	}
 
-	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode, filterByFiletypes, args.noSooc)
+	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode, filterByFiletypes, args.NoSooc)
 	if err != nil {
 		return err
 	}
