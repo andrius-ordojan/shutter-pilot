@@ -12,7 +12,7 @@ import (
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
 
-func scanFiles(dirPath string, filter []string) ([]media.File, error) {
+func scanFiles(dirPath string, filter []string, noSooc bool) ([]media.File, error) {
 	var results []media.File
 
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -25,20 +25,19 @@ func scanFiles(dirPath string, filter []string) ([]media.File, error) {
 		}
 
 		ext := strings.ToLower(filepath.Ext(path))
-
 		filetype := strings.TrimPrefix(ext, ".")
 		if !slices.Contains(filter, filetype) {
 			return nil
 		}
 
 		var m media.File
-		switch ext {
-		case ".jpg":
-			m = &media.Jpg{Path: path}
-		case ".raf":
-			m = &media.Raf{Path: path}
-		case ".mov":
-			m = &media.Mov{Path: path}
+		switch media.MediaType(filetype) {
+		case media.JpgMedia:
+			m = media.NewJpg(path, noSooc)
+		case media.RafMedia:
+			m = media.NewRaf(path)
+		case media.MovMedia:
+			m = media.NewMov(path)
 		default:
 			return fmt.Errorf("unsupported file: %s", path)
 		}

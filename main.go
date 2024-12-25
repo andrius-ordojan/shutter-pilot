@@ -12,13 +12,13 @@ import (
 var allowedFileTypes = []string{"jpg", "raf", "mov"}
 
 // TODO: change cli so I can have multiple sources and the last param will be destination ex: app source source dest
-// BUG: parameter positions are broken. = is required not sure if bug
 type args struct {
 	Source      string `arg:"positional,required" help:"source directory for media"`
 	Destination string `arg:"positional,required" help:"destination directory for orginised media"`
 	Filter      string `arg:"-f,--filter" help:"Filter by file types (allowed: jpg, raf, mov). Provide as a comma-separated list, e.g., -f jpg,mov"`
 	MoveMode    bool   `arg:"-m,--move" default:"false" help:"moves files instead of copying"`
 	DryRun      bool   `arg:"-d,--dryrun" default:"false" help:"does not modify file system"`
+	noSooc      bool   `arg:"-s,--nosooc" default:"false" help:"Does no place jpg photos under sooc directory, but next to raw files"`
 	// TODO: add option to disable jpg sooc subpath
 }
 
@@ -79,7 +79,7 @@ func run() error {
 		parser.Fail(err.Error())
 	}
 
-	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode, filterByFiletypes)
+	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode, filterByFiletypes, args.noSooc)
 	if err != nil {
 		return err
 	}

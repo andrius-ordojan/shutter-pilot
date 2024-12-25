@@ -13,6 +13,14 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
+func NewRaf(path string) *Raf {
+	if path == "" {
+		panic("path not set for media file")
+	}
+
+	return &Raf{Path: path}
+}
+
 type Raf struct {
 	Path        string
 	fingerprint string

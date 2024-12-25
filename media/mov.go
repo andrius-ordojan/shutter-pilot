@@ -19,6 +19,14 @@ const (
 	compressedMovieAtomType = "cmov"
 )
 
+func NewMov(path string) *Mov {
+	if path == "" {
+		panic("path not set for media file")
+	}
+
+	return &Mov{Path: path}
+}
+
 type Mov struct {
 	Path        string
 	fingerprint string

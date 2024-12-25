@@ -9,11 +9,17 @@ type File interface {
 	GetDestinationPath(base string) (string, error)
 }
 
-type mediaType string
+type (
+	MediaType string
+	mediaLoc  string
+)
 
 const (
-	photos mediaType = "photos"
-	videos mediaType = "videos"
+	JpgMedia MediaType = "jpg"
+	RafMedia MediaType = "raf"
+	MovMedia MediaType = "mov"
+	photos   mediaLoc  = "photos"
+	videos   mediaLoc  = "videos"
 )
 
 type LazyPath struct {

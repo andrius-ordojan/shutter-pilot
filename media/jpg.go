@@ -11,10 +11,19 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
+func NewJpg(path string, noSooc bool) *Jpg {
+	if path == "" {
+		panic("path not set for media file")
+	}
+
+	return &Jpg{Path: path, noSooc: noSooc}
+}
+
 type Jpg struct {
 	Path        string
 	fingerprint string
 	lazy        LazyPath
+	noSooc      bool
 }
 
 func (j *Jpg) GetPath() string {
@@ -55,7 +64,11 @@ func (j *Jpg) GetDestinationPath(base string) (string, error) {
 			date := creationTime.Format("2006-01-02")
 			year := strconv.Itoa(creationTime.Year())
 
-			mediaHome := filepath.Join(base, string(photos), year, date, "sooc")
+			subFolder := "sooc"
+			if j.noSooc {
+				subFolder = ""
+			}
+			mediaHome := filepath.Join(base, string(photos), year, date, subFolder)
 			return filepath.Join(mediaHome, filepath.Base(j.Path)), nil
 		})
 }
