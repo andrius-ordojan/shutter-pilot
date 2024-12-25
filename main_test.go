@@ -621,6 +621,38 @@ func Test_ShouldCopyCertainFiletypes_WhenFilterIsSelected(t *testing.T) {
 	}
 }
 
+func Test_ShouldNotUseSoocFolderForJpg_WhenNoSoocOptionIsSet(t *testing.T) {
+	// srcDir := makeSourceDirWithCleanup(t)
+	// destDir := makeDestinationDirWithCleanup(t)
+
+	t.Error("Not implemented")
+
+	// for _, m := range validTestMediaFiles() {
+	// 	m.SourceDir = srcDir
+	// 	m.DestinationDir = destDir
+	// 	m.CopyTo(srcDir)
+	// }
+	//
+	// err := runSilently(t, "app", "-f", "jpg", srcDir, destDir)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	//
+	// for _, m := range validTestMediaFiles() {
+	// 	if m.Type == JpgFile {
+	// 		err := m.CheckExistsAt(m.FullExpectedDestination())
+	// 		if err != nil {
+	// 			t.Fatal(err)
+	// 		}
+	// 	} else {
+	// 		err := m.CheckMissingAt(m.FullExpectedDestination())
+	// 		if err != nil {
+	// 			t.Fatal(err)
+	// 		}
+	// 	}
+	// }
+}
+
 // TODO:no subfolder setting test
 // TODO: test multiple sources
 
