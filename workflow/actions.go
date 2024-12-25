@@ -58,7 +58,12 @@ func newMoveAction(file media.File, destinationDir string) action {
 			return fmt.Sprintf("Moving from %s to %s", file.GetPath(), dstPath), nil
 		},
 		summery: func() string {
-			return fmt.Sprintf("Move: %s", file.GetPath())
+			dstPath, err := file.GetDestinationPath(destinationDir)
+			if err != nil {
+				dstPath = "unkown"
+			}
+
+			return fmt.Sprintf("Move: %s to %s", file.GetPath(), dstPath)
 		},
 	}
 }
@@ -112,7 +117,12 @@ func newCopyAction(file media.File, destinationDir string) action {
 			return fmt.Sprintf("Copying from %s to %s", file.GetPath(), dstPath), nil
 		},
 		summery: func() string {
-			return fmt.Sprintf("Copy: %s", file.GetPath())
+			dstPath, err := file.GetDestinationPath(destinationDir)
+			if err != nil {
+				dstPath = "unkown"
+			}
+
+			return fmt.Sprintf("Copy: %s to %s", file.GetPath(), dstPath)
 		},
 	}
 }
