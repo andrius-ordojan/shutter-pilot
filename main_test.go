@@ -647,7 +647,38 @@ func Test_ShouldNotUseSoocFolderForJpg_WhenNoSoocOptionIsSet(t *testing.T) {
 	}
 }
 
-// TODO: test multiple sources
+func Test_ShouldProcessFiles_WhenMultipleSourcesAreGiven(t *testing.T) {
+	srcDir1 := makeSourceDirWithCleanup(t)
+	srcDir2 := makeSourceDirWithCleanup(t)
+	destDir := makeDestinationDirWithCleanup(t)
+
+	for i, m := range validTestMediaFiles() {
+		if i%2 == 0 {
+			m.SourceDir = srcDir1
+			m.DestinationDir = destDir
+			m.CopyTo(srcDir1)
+
+		} else {
+
+			m.SourceDir = srcDir2
+			m.DestinationDir = destDir
+			m.CopyTo(srcDir2)
+
+		}
+	}
+
+	err := runLoudly(t, "app", srcDir1, srcDir2, destDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range validTestMediaFiles() {
+		err := m.CheckExistsAt(m.FullExpectedDestination())
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 func TestParseFileTypes(t *testing.T) {
 	tests := []struct {
