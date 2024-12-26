@@ -647,7 +647,6 @@ func Test_ShouldNotUseSoocFolderForJpg_WhenNoSoocOptionIsSet(t *testing.T) {
 	}
 }
 
-// TODO:no subfolder setting test
 // TODO: test multiple sources
 
 func TestParseFileTypes(t *testing.T) {
