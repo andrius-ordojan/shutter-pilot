@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -11,9 +12,8 @@ import (
 
 var allowedFileTypes = []string{"jpg", "raf", "mov"}
 
-// TODO: change cli so I can have multiple sources and the last param will be destination ex: app source source dest
 type args struct {
-	Source      string `arg:"positional,required" help:"source directory for media"`
+	Sources     string `arg:"positional,required" help:"source directories for media. Provide as a comma-separated list, e.g., /path/1,/path2/"`
 	Destination string `arg:"positional,required" help:"destination directory for orginised media"`
 	Filter      string `arg:"-f,--filter" help:"Filter by file types (allowed: jpg, raf, mov). Provide as a comma-separated list, e.g., -f jpg,mov"`
 	MoveMode    bool   `arg:"-m,--move" default:"false" help:"moves files instead of copying"`
@@ -23,21 +23,6 @@ type args struct {
 
 func (args) Description() string {
 	return "Orginizes photo and video media into lightroom style directory structure"
-}
-
-func parseFileTypes(input string) ([]string, error) {
-	parts := strings.Split(input, ",")
-
-	fileTypes := make([]string, 0, len(allowedFileTypes))
-	for i, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed == "" {
-			return nil, fmt.Errorf("empty file type detected at position %d", i+1)
-		}
-		fileTypes = append(fileTypes, trimmed)
-	}
-
-	return fileTypes, nil
 }
 
 func isValidFileType(ft string) bool {
@@ -50,12 +35,12 @@ func isValidFileType(ft string) bool {
 	return false
 }
 
-func ValidateFileTypes(filter string) ([]string, error) {
+func validateFileTypes(filter string) ([]string, error) {
 	if filter == "" {
 		return allowedFileTypes, nil
 	}
 
-	parsedFileTypes, err := parseFileTypes(filter)
+	parsedFileTypes, err := parseCommaSeperatedArg(filter)
 	if err != nil {
 		return nil, err
 	}
@@ -69,16 +54,44 @@ func ValidateFileTypes(filter string) ([]string, error) {
 	return parsedFileTypes, nil
 }
 
+func parseCommaSeperatedArg(arg string) ([]string, error) {
+	parts := strings.Split(arg, ",")
+
+	var args []string
+	for i, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			return nil, fmt.Errorf("empty argument detected at position %d", i+1)
+		}
+		args = append(args, trimmed)
+	}
+
+	return args, nil
+}
+
+func validateSources(sources string) ([]string, error) {
+	if sources == "" {
+		return nil, errors.New("sources cannot be empty")
+	}
+
+	return parseCommaSeperatedArg(sources)
+}
+
 func run() error {
 	var args args
 	parser := arg.MustParse(&args)
 
-	filterByFiletypes, err := ValidateFileTypes(args.Filter)
+	filterByFiletypes, err := validateFileTypes(args.Filter)
 	if err != nil {
 		parser.Fail(err.Error())
 	}
 
-	plan, err := workflow.CreatePlan(args.Source, args.Destination, args.MoveMode, filterByFiletypes, args.NoSooc)
+	sourcesList, err := validateSources(args.Sources)
+	if err != nil {
+		parser.Fail(err.Error())
+	}
+
+	plan, err := workflow.CreatePlan(sourcesList, args.Destination, args.MoveMode, filterByFiletypes, args.NoSooc)
 	if err != nil {
 		return err
 	}

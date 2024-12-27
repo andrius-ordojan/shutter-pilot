@@ -93,12 +93,18 @@ func (p *Plan) printSummary() error {
 	return nil
 }
 
-func CreatePlan(sourcePath, destinationPath string, moveMode bool, filter []string, noSooc bool) (Plan, error) {
+func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, filter []string, noSooc bool) (Plan, error) {
 	fmt.Println("building execution plan... (depending on disk used and number of files this might take a while)")
+	fmt.Println("")
 
-	sourceMedia, err := scanFiles(sourcePath, filter, noSooc)
-	if err != nil {
-		return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
+	var sourceMedia []media.File
+	for _, sourcePath := range sourcePaths {
+		media, err := scanFiles(sourcePath, filter, noSooc)
+		if err != nil {
+			return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
+		}
+
+		sourceMedia = append(sourceMedia, media...)
 	}
 	sourceMap := make(map[string]media.File)
 	for _, media := range sourceMedia {

@@ -659,15 +659,12 @@ func Test_ShouldProcessFiles_WhenMultipleSourcesAreGiven(t *testing.T) {
 			m.CopyTo(srcDir1)
 
 		} else {
-
 			m.SourceDir = srcDir2
 			m.DestinationDir = destDir
 			m.CopyTo(srcDir2)
-
 		}
 	}
-
-	err := runLoudly(t, "app", srcDir1, srcDir2, destDir)
+	err := runSilently(t, "app", fmt.Sprintf("%s,%s", srcDir1, srcDir2), destDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -745,7 +742,7 @@ func TestParseFileTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := parseFileTypes(tt.input)
+			got, err := parseCommaSeperatedArg(tt.input)
 			if (err != nil) != tt.expectErr {
 				t.Errorf("parseFileTypes() error = %v, expectErr %v", err, tt.expectErr)
 				return
@@ -863,7 +860,7 @@ func TestValidateFileTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ValidateFileTypes(tt.filter)
+			got, err := validateFileTypes(tt.filter)
 			if (err != nil) != tt.expectErr {
 				t.Errorf("ValidateFileTypes() error = %v, expectErr %v", err, tt.expectErr)
 				return
