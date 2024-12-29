@@ -6,58 +6,114 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
 
+// TODO: add context.Context to be able shutdown all threads safly from terminal kill command
 func scanFiles(dirPath string, filter []string, noSooc bool) ([]media.File, error) {
 	var results []media.File
 
-	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
+	jobs := make(chan string, 100)
+	resultsChan := make(chan media.File, 100)
+	errorChan := make(chan error, 1) // Buffer of 1 to ensure non-blocking
 
-		if info.IsDir() {
-			return nil
-		}
+	var wg sync.WaitGroup
 
-		ext := strings.ToLower(filepath.Ext(path))
-		filetype := strings.TrimPrefix(ext, ".")
-		if !slices.Contains(filter, filetype) {
-			return nil
-		}
-
-		var m media.File
-		switch media.MediaType(filetype) {
-		case media.JpgMedia:
-			m = media.NewJpg(path, noSooc)
-		case media.RafMedia:
-			m = media.NewRaf(path)
-		case media.MovMedia:
-			m = media.NewMov(path)
-		default:
-			return fmt.Errorf("unsupported file: %s", path)
-		}
-
-		hash, err := partialHash(path)
-		if err != nil {
-			return fmt.Errorf("error calculating partial hash for %s: %w", path, err)
-		}
-
-		m.SetFingerprint(hash)
-
-		results = append(results, m)
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	numWorkers := runtime.NumCPU() * 2
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for path := range jobs {
+				m, err := processFile(path, noSooc)
+				if err != nil {
+					select {
+					case errorChan <- err:
+					default:
+					}
+					return
+				}
+				resultsChan <- m
+			}
+		}()
 	}
 
-	return results, nil
+	// TODO: Instead of sending individual file paths to the jobs channel, send batches of file paths
+	go func() {
+		defer close(jobs)
+		err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			ext := strings.ToLower(filepath.Ext(path))
+			filetype := strings.TrimPrefix(ext, ".")
+			if !slices.Contains(filter, filetype) {
+				return nil
+			}
+
+			jobs <- path
+
+			return nil
+		})
+		if err != nil {
+			select {
+			case errorChan <- err:
+			default:
+			}
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	for {
+		select {
+		case err := <-errorChan:
+			return nil, err
+		case m, ok := <-resultsChan:
+			if !ok {
+				return results, nil
+			}
+			results = append(results, m)
+		}
+	}
+}
+
+func processFile(path string, noSooc bool) (media.File, error) {
+	ext := strings.ToLower(filepath.Ext(path))
+	filetype := strings.TrimPrefix(ext, ".")
+
+	var m media.File
+	switch media.MediaType(filetype) {
+	case media.JpgMedia:
+		m = media.NewJpg(path, noSooc)
+	case media.RafMedia:
+		m = media.NewRaf(path)
+	case media.MovMedia:
+		m = media.NewMov(path)
+	default:
+		return nil, fmt.Errorf("unsupported media type: %s", path)
+	}
+
+	hash, err := partialHash(path)
+	if err != nil {
+		return nil, fmt.Errorf("error calculating partial hash for %s: %w", path, err)
+	}
+
+	m.SetFingerprint(hash)
+	return m, nil
 }
 
 func calculateChunkSize(fileSize int64) int64 {

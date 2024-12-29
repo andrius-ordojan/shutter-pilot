@@ -95,19 +95,19 @@ func (p *Plan) printSummary() error {
 
 func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, filter []string, noSooc bool) (Plan, error) {
 	fmt.Println("building execution plan... (depending on disk used and number of files this might take a while)")
-	fmt.Println("")
 
+	// TODO: make this concurrent as well
 	var sourceMedia []media.File
 	for _, sourcePath := range sourcePaths {
 		media, err := scanFiles(sourcePath, filter, noSooc)
 		if err != nil {
 			return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
 		}
-
 		sourceMedia = append(sourceMedia, media...)
 	}
 	sourceMap := make(map[string]media.File)
 	for _, media := range sourceMedia {
+		// BUG: handle duplicate
 		sourceMap[media.GetFingerprint()] = media
 	}
 
@@ -122,6 +122,7 @@ func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, fil
 
 	plan := Plan{moveMode: moveMode}
 
+	// TODO: make this concurrent as well. Probably related to calling get destination that calls to disk
 	for _, files := range destMap {
 		if len(files) > 1 {
 			plan.addAction(newConflictAction(files))
