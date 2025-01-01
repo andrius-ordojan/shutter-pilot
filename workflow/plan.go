@@ -107,7 +107,9 @@ func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, fil
 	}
 	sourceMap := make(map[string]media.File)
 	for _, media := range sourceMedia {
-		// BUG: handle duplicate
+		if _, ok := sourceMap[media.GetFingerprint()]; !ok {
+			continue
+		}
 		sourceMap[media.GetFingerprint()] = media
 	}
 
@@ -123,6 +125,7 @@ func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, fil
 	plan := Plan{moveMode: moveMode}
 
 	// TODO: make this concurrent as well. Probably related to calling get destination that calls to disk
+	// or maybe calculate during scanning?
 	for _, files := range destMap {
 		if len(files) > 1 {
 			plan.addAction(newConflictAction(files))
