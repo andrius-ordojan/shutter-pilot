@@ -125,7 +125,6 @@ func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, fil
 	plan := Plan{moveMode: moveMode}
 
 	// TODO: make this concurrent as well. Probably related to calling get destination that calls to disk
-	// or maybe calculate during scanning?
 	for _, files := range destMap {
 		if len(files) > 1 {
 			plan.addAction(newConflictAction(files))
