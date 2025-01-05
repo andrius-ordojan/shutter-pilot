@@ -2,8 +2,6 @@ package workflow
 
 import (
 	"fmt"
-
-	"github.com/andrius-ordojan/shutter-pilot/media"
 )
 
 const (
@@ -96,42 +94,21 @@ func (p *Plan) printSummary() error {
 func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, filter []string, noSooc bool) (Plan, error) {
 	fmt.Println("building execution plan... (depending on disk used and number of files this might take a while)")
 
-	// TODO: make this concurrent as well
-	var sourceMedia []media.File
-	for _, sourcePath := range sourcePaths {
-		media, err := scanFiles(sourcePath, filter, noSooc)
-		if err != nil {
-			return Plan{}, fmt.Errorf("error occured while scanning source directory: %w", err)
-		}
-		sourceMedia = append(sourceMedia, media...)
-	}
-	sourceMap := make(map[string]media.File)
-	for _, media := range sourceMedia {
-		if _, ok := sourceMap[media.GetFingerprint()]; !ok {
-			continue
-		}
-		sourceMap[media.GetFingerprint()] = media
-	}
-
-	destinationMedia, err := scanFiles(destinationPath, filter, noSooc)
+	mediaMaps, err := prepareMediaMaps(sourcePaths, destinationPath, filter, noSooc)
 	if err != nil {
-		return Plan{}, fmt.Errorf("error occured while scanning destination directory: %w", err)
-	}
-	destMap := make(map[string][]media.File)
-	for _, media := range destinationMedia {
-		destMap[media.GetFingerprint()] = append(destMap[media.GetFingerprint()], media)
+		return Plan{}, err
 	}
 
 	plan := Plan{moveMode: moveMode}
 
 	// TODO: make this concurrent as well. Probably related to calling get destination that calls to disk
-	for _, files := range destMap {
+	for _, files := range mediaMaps.DestMap {
 		if len(files) > 1 {
 			plan.addAction(newConflictAction(files))
 		}
 	}
 
-	for _, e := range destMap {
+	for _, e := range mediaMaps.DestMap {
 		mediaDestPath, err := e[0].GetDestinationPath(destinationPath)
 		if err != nil {
 			return Plan{}, fmt.Errorf("%s %w", e[0].GetPath(), err)
@@ -142,8 +119,8 @@ func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, fil
 		}
 	}
 
-	for hash, srcMedia := range sourceMap {
-		if e, exists := destMap[hash]; exists {
+	for hash, srcMedia := range mediaMaps.SourceMap {
+		if e, exists := mediaMaps.DestMap[hash]; exists {
 			plan.addAction(newSkipAction(srcMedia, e[0]))
 		} else {
 			if moveMode {
