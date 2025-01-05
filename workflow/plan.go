@@ -101,7 +101,7 @@ func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, fil
 
 	plan := Plan{moveMode: moveMode}
 
-	// TODO: make this concurrent as well. Probably related to calling get destination that calls to disk
+	fmt.Println("making plan")
 	for _, files := range mediaMaps.DestMap {
 		if len(files) > 1 {
 			plan.addAction(newConflictAction(files))
