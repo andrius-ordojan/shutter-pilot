@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"errors"
 	"fmt"
 )
 
@@ -97,6 +98,9 @@ func CreatePlan(ctx context.Context, sourcePaths []string, destinationPath strin
 
 	mediaMaps, err := prepareMediaMaps(ctx, sourcePaths, destinationPath, filter, noSooc)
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return Plan{}, errors.New("Plan creation canceled")
+		}
 		return Plan{}, err
 	}
 
