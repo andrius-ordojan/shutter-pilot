@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -91,10 +92,10 @@ func (p *Plan) printSummary() error {
 	return nil
 }
 
-func CreatePlan(sourcePaths []string, destinationPath string, moveMode bool, filter []string, noSooc bool) (Plan, error) {
+func CreatePlan(ctx context.Context, sourcePaths []string, destinationPath string, moveMode bool, filter []string, noSooc bool) (Plan, error) {
 	fmt.Println("building execution plan... (depending on disk used and number of files this might take a while)")
 
-	mediaMaps, err := prepareMediaMaps(sourcePaths, destinationPath, filter, noSooc)
+	mediaMaps, err := prepareMediaMaps(ctx, sourcePaths, destinationPath, filter, noSooc)
 	if err != nil {
 		return Plan{}, err
 	}

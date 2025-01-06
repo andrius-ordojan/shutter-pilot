@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
 
 	"github.com/alexflint/go-arg"
@@ -78,6 +80,9 @@ func validateSources(sources string) ([]string, error) {
 }
 
 func run() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
+
 	var args args
 	parser := arg.MustParse(&args)
 
@@ -91,7 +96,7 @@ func run() error {
 		parser.Fail(err.Error())
 	}
 
-	plan, err := workflow.CreatePlan(sourcesList, args.Destination, args.MoveMode, filterByFiletypes, args.NoSooc)
+	plan, err := workflow.CreatePlan(ctx, sourcesList, args.Destination, args.MoveMode, filterByFiletypes, args.NoSooc)
 	if err != nil {
 		return err
 	}

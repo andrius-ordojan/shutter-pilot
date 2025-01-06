@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"io"
@@ -20,6 +21,7 @@ type MediaMaps struct {
 }
 
 func prepareMediaMaps(
+	ctx context.Context,
 	sourcePaths []string,
 	destinationPath string,
 	filter []string,
@@ -31,7 +33,7 @@ func prepareMediaMaps(
 	)
 
 	for _, sourcePath := range sourcePaths {
-		mediaFiles, err := scanFiles(sourcePath, filter, noSooc)
+		mediaFiles, err := scanFiles(ctx, sourcePath, filter, noSooc)
 		if err != nil {
 			return MediaMaps{}, fmt.Errorf("error occurred while scanning source directory '%s': %w", sourcePath, err)
 		}
@@ -46,7 +48,7 @@ func prepareMediaMaps(
 		}
 	}
 
-	destinationMedia, err := scanFiles(destinationPath, filter, noSooc)
+	destinationMedia, err := scanFiles(ctx, destinationPath, filter, noSooc)
 	if err != nil {
 		return MediaMaps{}, fmt.Errorf("error occurred while scanning destination directory '%s': %w", destinationPath, err)
 	}
@@ -63,7 +65,8 @@ func prepareMediaMaps(
 		SourceMap: sourceMap,
 		DestMap:   destMap,
 	}
-	err = computeDestinationPaths(&result, destinationPath)
+
+	err = computeDestinationPaths(ctx, &result, destinationPath)
 	if err != nil {
 		return MediaMaps{}, err
 	}
@@ -76,7 +79,7 @@ func prepareMediaMaps(
 	}, nil
 }
 
-func computeDestinationPaths(mediaMaps *MediaMaps, dstPath string) error {
+func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath string) error {
 	errorChan := make(chan error, 1)
 	jobs := make(chan media.File, len(mediaMaps.SourceMap)+len(mediaMaps.DestMap))
 	var wg sync.WaitGroup
@@ -86,14 +89,22 @@ func computeDestinationPaths(mediaMaps *MediaMaps, dstPath string) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for m := range jobs {
-				_, err := m.GetDestinationPath(dstPath)
-				if err != nil {
-					select {
-					case errorChan <- err:
-					default:
-					}
+			for {
+				select {
+				case <-ctx.Done():
 					return
+				case m, ok := <-jobs:
+					if !ok {
+						return
+					}
+					_, err := m.GetDestinationPath(dstPath)
+					if err != nil {
+						select {
+						case errorChan <- err:
+						default:
+						}
+						return
+					}
 				}
 			}
 		}()
@@ -102,11 +113,19 @@ func computeDestinationPaths(mediaMaps *MediaMaps, dstPath string) error {
 	go func() {
 		defer close(jobs)
 		for _, file := range mediaMaps.SourceMap {
-			jobs <- file
+			select {
+			case <-ctx.Done():
+				return
+			case jobs <- file:
+			}
 		}
 		for _, files := range mediaMaps.DestMap {
 			for _, file := range files {
-				jobs <- file
+				select {
+				case <-ctx.Done():
+					return
+				case jobs <- file:
+				}
 			}
 		}
 	}()
@@ -116,17 +135,19 @@ func computeDestinationPaths(mediaMaps *MediaMaps, dstPath string) error {
 		close(errorChan)
 	}()
 
-	for err := range errorChan {
-		if err != nil {
-			return fmt.Errorf("error occurred while computing destination path: %w", err)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errorChan:
+			if err != nil {
+				return fmt.Errorf("error occurred while computing destination path: %w", err)
+			}
 		}
 	}
-
-	return nil
 }
 
-// TODO: add context.Context to be able shutdown all threads safly from terminal kill command
-func scanFiles(dirPath string, filter []string, noSooc bool) ([]media.File, error) {
+func scanFiles(ctx context.Context, dirPath string, filter []string, noSooc bool) ([]media.File, error) {
 	var results []media.File
 
 	jobs := make(chan string, 100)
@@ -139,22 +160,32 @@ func scanFiles(dirPath string, filter []string, noSooc bool) ([]media.File, erro
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
-			defer wg.Done()
-			for path := range jobs {
-				m, err := processFile(path, noSooc)
-				if err != nil {
-					select {
-					case errorChan <- err:
-					default:
-					}
+			for {
+				select {
+				case <-ctx.Done():
 					return
+				case path, ok := <-jobs:
+					if !ok {
+						return
+					}
+					m, err := processFile(path, noSooc)
+					if err != nil {
+						select {
+						case errorChan <- err:
+						default:
+						}
+						return
+					}
+					select {
+					case resultsChan <- m:
+					case <-ctx.Done():
+						return
+					}
 				}
-				resultsChan <- m
 			}
 		}()
 	}
 
-	// TODO: Instead of sending individual file paths to the jobs channel, send batches of file paths
 	go func() {
 		defer close(jobs)
 		err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
@@ -172,7 +203,11 @@ func scanFiles(dirPath string, filter []string, noSooc bool) ([]media.File, erro
 				return nil
 			}
 
-			jobs <- path
+			select {
+			case <-ctx.Done():
+				return context.Canceled
+			case jobs <- path:
+			}
 
 			return nil
 		})
@@ -191,6 +226,8 @@ func scanFiles(dirPath string, filter []string, noSooc bool) ([]media.File, erro
 
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
 		case err := <-errorChan:
 			return nil, err
 		case m, ok := <-resultsChan:
