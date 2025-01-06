@@ -103,7 +103,6 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 						case errorChan <- err:
 						default:
 						}
-						return
 					}
 				}
 			}
@@ -139,10 +138,11 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case err := <-errorChan:
-			if err != nil {
-				return fmt.Errorf("error occurred while computing destination path: %w", err)
+		case err, ok := <-errorChan:
+			if !ok {
+				return nil
 			}
+			return fmt.Errorf("error occurred while computing destination path: %w", err)
 		}
 	}
 }
@@ -160,6 +160,7 @@ func scanFiles(ctx context.Context, dirPath string, filter []string, noSooc bool
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			for {
 				select {
 				case <-ctx.Done():
