@@ -15,6 +15,60 @@ import (
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
 
+type workerPool[T any] struct {
+	jobs      chan T
+	errorChan chan error
+	wg        sync.WaitGroup
+}
+
+func newWorkerPool[T any](jobBufferSize int) *workerPool[T] {
+	return &workerPool[T]{
+		jobs:      make(chan T, jobBufferSize),
+		errorChan: make(chan error, 1), // Buffer of 1 to ensure non-blocking
+	}
+}
+
+func (wp *workerPool[T]) start(ctx context.Context, workerFunc func(T) error) {
+	numWorkers := runtime.NumCPU() * 2
+
+	for i := 0; i < numWorkers; i++ {
+		wp.wg.Add(1)
+		go func() {
+			defer wp.wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case job, ok := <-wp.jobs:
+					if !ok {
+						return
+					}
+					if err := workerFunc(job); err != nil {
+						select {
+						case wp.errorChan <- err:
+						default:
+						}
+					}
+				}
+			}
+		}()
+	}
+}
+
+func (wp *workerPool[T]) stop() {
+	close(wp.jobs)
+	wp.wg.Wait()
+	close(wp.errorChan)
+}
+
+func (wp *workerPool[T]) enqueue(job T) {
+	wp.jobs <- job
+}
+
+func (wp *workerPool[T]) errors() <-chan error {
+	return wp.errorChan
+}
+
 type MediaMaps struct {
 	SourceMap map[string]media.File
 	DestMap   map[string][]media.File
@@ -59,8 +113,6 @@ func prepareMediaMaps(
 		destMap[fingerprint] = append(destMap[fingerprint], mediaFile)
 	}
 
-	fmt.Println("done scanning")
-
 	result := MediaMaps{
 		SourceMap: sourceMap,
 		DestMap:   destMap,
@@ -71,8 +123,6 @@ func prepareMediaMaps(
 		return MediaMaps{}, err
 	}
 
-	fmt.Println("done getting destingations")
-
 	return MediaMaps{
 		SourceMap: sourceMap,
 		DestMap:   destMap,
@@ -80,42 +130,21 @@ func prepareMediaMaps(
 }
 
 func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath string) error {
-	errorChan := make(chan error, 1)
-	jobs := make(chan media.File, len(mediaMaps.SourceMap)+len(mediaMaps.DestMap))
-	var wg sync.WaitGroup
-	numWorkers := runtime.NumCPU() * 2
+	wp := newWorkerPool[media.File](len(mediaMaps.SourceMap) + len(mediaMaps.DestMap))
 
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case m, ok := <-jobs:
-					if !ok {
-						return
-					}
-					_, err := m.GetDestinationPath(dstPath)
-					if err != nil {
-						select {
-						case errorChan <- err:
-						default:
-						}
-					}
-				}
-			}
-		}()
-	}
+	wp.start(ctx, func(file media.File) error {
+		_, err := file.GetDestinationPath(dstPath)
+		return err
+	})
 
 	go func() {
-		defer close(jobs)
+		defer wp.stop()
 		for _, file := range mediaMaps.SourceMap {
 			select {
 			case <-ctx.Done():
 				return
-			case jobs <- file:
+			default:
+				wp.enqueue(file)
 			}
 		}
 		for _, files := range mediaMaps.DestMap {
@@ -123,22 +152,18 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 				select {
 				case <-ctx.Done():
 					return
-				case jobs <- file:
+				default:
+					wp.enqueue(file)
 				}
 			}
 		}
-	}()
-
-	go func() {
-		wg.Wait()
-		close(errorChan)
 	}()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case err, ok := <-errorChan:
+		case err, ok := <-wp.errors():
 			if !ok {
 				return nil
 			}
@@ -148,80 +173,55 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 }
 
 func scanFiles(ctx context.Context, dirPath string, filter []string, noSooc bool) ([]media.File, error) {
+	wp := newWorkerPool[string](100)
+	resultsChan := make(chan media.File, 100)
 	var results []media.File
 
-	jobs := make(chan string, 100)
-	resultsChan := make(chan media.File, 100)
-	errorChan := make(chan error, 1) // Buffer of 1 to ensure non-blocking
-
-	var wg sync.WaitGroup
-
-	numWorkers := runtime.NumCPU() * 2
-	for i := 0; i < numWorkers; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case path, ok := <-jobs:
-					if !ok {
-						return
-					}
-					m, err := processFile(path, noSooc)
-					if err != nil {
-						select {
-						case errorChan <- err:
-						default:
-						}
-						return
-					}
-					select {
-					case resultsChan <- m:
-					case <-ctx.Done():
-						return
-					}
-				}
-			}
-		}()
-	}
+	wp.start(ctx, func(path string) error {
+		m, err := processFile(path, noSooc)
+		if err != nil {
+			return err
+		}
+		select {
+		case resultsChan <- m:
+		case <-ctx.Done():
+			return context.Canceled
+		}
+		return nil
+	})
 
 	go func() {
-		defer close(jobs)
+		defer wp.stop()
 		err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-
 			if info.IsDir() {
 				return nil
 			}
-
 			ext := strings.ToLower(filepath.Ext(path))
 			filetype := strings.TrimPrefix(ext, ".")
 			if !slices.Contains(filter, filetype) {
 				return nil
 			}
-
 			select {
 			case <-ctx.Done():
 				return context.Canceled
-			case jobs <- path:
+			default:
+				wp.enqueue(path)
 			}
-
 			return nil
 		})
 		if err != nil {
 			select {
-			case errorChan <- err:
+			case wp.errorChan <- err:
 			default:
 			}
 		}
 	}()
 
 	go func() {
-		wg.Wait()
+		wp.wg.Wait()
 		close(resultsChan)
 	}()
 
@@ -229,7 +229,10 @@ func scanFiles(ctx context.Context, dirPath string, filter []string, noSooc bool
 		select {
 		case <-ctx.Done():
 			return nil, ctx.Err()
-		case err := <-errorChan:
+		case err, ok := <-wp.errors():
+			if !ok {
+				return results, nil
+			}
 			return nil, err
 		case m, ok := <-resultsChan:
 			if !ok {
