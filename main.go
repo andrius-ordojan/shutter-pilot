@@ -102,10 +102,12 @@ func run() error {
 	}
 
 	if !args.DryRun {
-		// TODO: add context to apply so files don't get half copied.
-		// operation would shut down gracefully by finishing the currently running action
-		err := plan.Apply()
+		err := plan.Apply(ctx)
 		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return errors.New("application shutting down gracefully")
+			}
+
 			return fmt.Errorf("error while applying plan: %w", err)
 		}
 	}

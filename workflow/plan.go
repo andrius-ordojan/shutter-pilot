@@ -21,7 +21,7 @@ func (p *Plan) addAction(action action) {
 	p.actions = append(p.actions, action)
 }
 
-func (p *Plan) Apply() error {
+func (p *Plan) Apply(ctx context.Context) error {
 	fmt.Println("Applying plan:")
 
 	for _, a := range p.actions {
@@ -32,12 +32,17 @@ func (p *Plan) Apply() error {
 	}
 
 	for _, action := range p.actions {
-		result, err := action.execute()
-		if err != nil {
-			return err
-		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			result, err := action.execute()
+			if err != nil {
+				return err
+			}
 
-		fmt.Printf("  %s\n", result)
+			fmt.Printf("  %s\n", result)
+		}
 	}
 
 	fmt.Printf("\n")
@@ -99,13 +104,14 @@ func CreatePlan(ctx context.Context, sourcePaths []string, destinationPath strin
 	mediaMaps, err := prepareMediaMaps(ctx, sourcePaths, destinationPath, filter, noSooc)
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
-			return Plan{}, errors.New("Plan creation canceled")
+			return Plan{}, errors.New("Plan creation interrupted")
 		}
 		return Plan{}, err
 	}
 
 	plan := Plan{moveMode: moveMode}
 
+	// TODO: add handling functions instead this
 	for _, files := range mediaMaps.DestMap {
 		if len(files) > 1 {
 			plan.addAction(newConflictAction(files))
