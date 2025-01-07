@@ -106,7 +106,6 @@ func CreatePlan(ctx context.Context, sourcePaths []string, destinationPath strin
 
 	plan := Plan{moveMode: moveMode}
 
-	fmt.Println("making plan")
 	for _, files := range mediaMaps.DestMap {
 		if len(files) > 1 {
 			plan.addAction(newConflictAction(files))
