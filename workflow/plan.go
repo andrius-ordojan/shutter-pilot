@@ -13,12 +13,48 @@ const (
 )
 
 type Plan struct {
-	actions  []action
-	moveMode bool
+	actions []action
 }
 
 func (p *Plan) addAction(action action) {
 	p.actions = append(p.actions, action)
+}
+
+func (p *Plan) handleDestinationsConflicts(mediaMaps *MediaMaps) {
+	for _, files := range mediaMaps.DestMap {
+		if len(files) > 1 {
+			p.addAction(newConflictAction(files))
+		}
+	}
+}
+
+func (p *Plan) handleDestinationFiles(mediaMaps *MediaMaps, destinationPath string) error {
+	for _, e := range mediaMaps.DestMap {
+		mediaDestPath, err := e[0].GetDestinationPath(destinationPath)
+		if err != nil {
+			return fmt.Errorf("%s %w", e[0].GetPath(), err)
+		}
+
+		if e[0].GetPath() != mediaDestPath {
+			p.addAction(newMoveAction(e[0], destinationPath))
+		}
+	}
+
+	return nil
+}
+
+func (p *Plan) handleSourceFiles(mediaMaps *MediaMaps, moveMode bool, destinationPath string) {
+	for hash, srcMedia := range mediaMaps.SourceMap {
+		if e, exists := mediaMaps.DestMap[hash]; exists {
+			p.addAction(newSkipAction(srcMedia, e[0]))
+		} else {
+			if moveMode {
+				p.addAction(newMoveAction(srcMedia, destinationPath))
+			} else {
+				p.addAction(newCopyAction(srcMedia, destinationPath))
+			}
+		}
+	}
 }
 
 func (p *Plan) Apply(ctx context.Context) error {
@@ -109,37 +145,14 @@ func CreatePlan(ctx context.Context, sourcePaths []string, destinationPath strin
 		return Plan{}, err
 	}
 
-	plan := Plan{moveMode: moveMode}
+	plan := Plan{}
 
-	// TODO: add handling functions instead this
-	for _, files := range mediaMaps.DestMap {
-		if len(files) > 1 {
-			plan.addAction(newConflictAction(files))
-		}
+	plan.handleDestinationsConflicts(&mediaMaps)
+	err = plan.handleDestinationFiles(&mediaMaps, destinationPath)
+	if err != nil {
+		return Plan{}, err
 	}
-
-	for _, e := range mediaMaps.DestMap {
-		mediaDestPath, err := e[0].GetDestinationPath(destinationPath)
-		if err != nil {
-			return Plan{}, fmt.Errorf("%s %w", e[0].GetPath(), err)
-		}
-
-		if e[0].GetPath() != mediaDestPath {
-			plan.addAction(newMoveAction(e[0], destinationPath))
-		}
-	}
-
-	for hash, srcMedia := range mediaMaps.SourceMap {
-		if e, exists := mediaMaps.DestMap[hash]; exists {
-			plan.addAction(newSkipAction(srcMedia, e[0]))
-		} else {
-			if moveMode {
-				plan.addAction(newMoveAction(srcMedia, destinationPath))
-			} else {
-				plan.addAction(newCopyAction(srcMedia, destinationPath))
-			}
-		}
-	}
+	plan.handleSourceFiles(&mediaMaps, moveMode, destinationPath)
 
 	err = plan.printSummary()
 	if err != nil {
