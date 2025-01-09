@@ -192,7 +192,6 @@ func prepareMediaMaps(
 		SourceMap: sourceMap,
 		DestMap:   destMap,
 	}
-
 	err = computeDestinationPaths(ctx, &result, destinationPath)
 	if err != nil {
 		return MediaMaps{}, err
@@ -207,7 +206,12 @@ func prepareMediaMaps(
 }
 
 func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath string) error {
-	wp := newWorkerPool[media.File](len(mediaMaps.SourceMap) + len(mediaMaps.DestMap))
+	destLen := 0
+	for _, files := range mediaMaps.DestMap {
+		destLen += len(files)
+	}
+	bufferLen := len(mediaMaps.SourceMap) + destLen
+	wp := newWorkerPool[media.File](bufferLen)
 
 	for _, file := range mediaMaps.SourceMap {
 		select {
