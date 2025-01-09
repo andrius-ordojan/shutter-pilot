@@ -491,7 +491,7 @@ func Test_ShouldConflict_WhenDuplicateMediaExistsInDestination(t *testing.T) {
 	}
 }
 
-func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T) {
+func Test_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T) {
 	sourceDir, err := os.MkdirTemp(".", "tmptest")
 	if err != nil {
 		t.Error(err)
@@ -508,7 +508,7 @@ func TestIntegration_ShouldError_WhenDestinationFolderDoesNotExist(t *testing.T)
 	}
 }
 
-func TestIntegration_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
+func Test_ShouldError_WhenSourceFolderDoesNotExist(t *testing.T) {
 	destDir, err := os.MkdirTemp(".", "tmptest")
 	if err != nil {
 		t.Error(err)
