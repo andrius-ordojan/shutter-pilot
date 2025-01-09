@@ -136,6 +136,7 @@ func (p *Plan) printSummary() error {
 
 func CreatePlan(ctx context.Context, sourcePaths []string, destinationPath string, moveMode bool, filter []string, noSooc bool) (Plan, error) {
 	fmt.Println("building execution plan... (depending on disk used and number of files this might take a while)")
+	fmt.Println()
 
 	mediaMaps, err := prepareMediaMaps(ctx, sourcePaths, destinationPath, filter, noSooc)
 	if err != nil {

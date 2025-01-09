@@ -5,36 +5,51 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/andrius-ordojan/shutter-pilot/media"
 )
 
+type progressReport struct {
+	Processed int64
+	Total     int64
+}
+
 type workerPool[T any] struct {
-	jobs      chan T
-	errorChan chan error
-	wg        sync.WaitGroup
+	jobs          chan T
+	errorChan     chan error
+	progressChan  chan progressReport
+	totalJobs     atomic.Int64
+	processedJobs atomic.Int64
+	workerWG      sync.WaitGroup
+	reporterWG    sync.WaitGroup
 }
 
 func newWorkerPool[T any](jobBufferSize int) *workerPool[T] {
 	return &workerPool[T]{
-		jobs:      make(chan T, jobBufferSize),
-		errorChan: make(chan error, 1), // Buffer of 1 to ensure non-blocking
+		jobs:         make(chan T, jobBufferSize),
+		errorChan:    make(chan error, 1), // Buffer of 1 to ensure non-blocking
+		progressChan: make(chan progressReport),
 	}
 }
 
 func (wp *workerPool[T]) start(ctx context.Context, workerFunc func(T) error) {
 	numWorkers := runtime.NumCPU() * 2
 
+	wp.reporterWG.Add(1)
+	go wp.startProgressReporter(ctx)
+
 	for i := 0; i < numWorkers; i++ {
-		wp.wg.Add(1)
+		wp.workerWG.Add(1)
 		go func() {
-			defer wp.wg.Done()
+			defer wp.workerWG.Done()
 			for {
 				select {
 				case <-ctx.Done():
@@ -49,20 +64,78 @@ func (wp *workerPool[T]) start(ctx context.Context, workerFunc func(T) error) {
 						default:
 						}
 					}
+					wp.processedJobs.Add(1)
+					wp.sendProgress()
 				}
 			}
 		}()
 	}
 }
 
-func (wp *workerPool[T]) stop() {
+func (wp *workerPool[T]) startProgressReporter(ctx context.Context) {
+	defer wp.reporterWG.Done()
+
+	const progressStep = 20.0
+	var lastReportedPercentage float64
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case progress, ok := <-wp.progressChan:
+			if !ok {
+				return
+			}
+
+			if progress.Total == 0 {
+				return
+			}
+
+			currentPercentage := (float64(progress.Processed) / float64(progress.Total)) * 100
+
+			if currentPercentage >= lastReportedPercentage+progressStep || currentPercentage == 100 {
+				fmt.Printf("    Processed %d/%d files (%.0f%%)\n", progress.Processed, progress.Total, currentPercentage)
+
+				lastReportedPercentage = currentPercentage - math.Mod(currentPercentage, progressStep)
+			}
+
+			if progress.Processed == progress.Total {
+				return
+			}
+		}
+	}
+}
+
+func (wp *workerPool[T]) sendProgress() {
+	select {
+	case wp.progressChan <- progressReport{
+		Processed: wp.processedJobs.Load(),
+		Total:     wp.totalJobs.Load(),
+	}:
+	default:
+	}
+}
+
+func (wp *workerPool[T]) stop(optionalFunc func()) {
 	close(wp.jobs)
-	wp.wg.Wait()
+
+	wp.workerWG.Wait()
+
+	wp.sendProgress()
+	wp.reporterWG.Wait()
+
 	close(wp.errorChan)
+	close(wp.progressChan)
+
+	if optionalFunc != nil {
+		optionalFunc()
+	}
 }
 
 func (wp *workerPool[T]) enqueue(job T) {
 	wp.jobs <- job
+	wp.totalJobs.Add(1)
+	wp.sendProgress()
 }
 
 func (wp *workerPool[T]) errors() <-chan error {
@@ -113,6 +186,8 @@ func prepareMediaMaps(
 		destMap[fingerprint] = append(destMap[fingerprint], mediaFile)
 	}
 
+	fmt.Println()
+
 	result := MediaMaps{
 		SourceMap: sourceMap,
 		DestMap:   destMap,
@@ -123,6 +198,8 @@ func prepareMediaMaps(
 		return MediaMaps{}, err
 	}
 
+	fmt.Println()
+
 	return MediaMaps{
 		SourceMap: sourceMap,
 		DestMap:   destMap,
@@ -132,32 +209,32 @@ func prepareMediaMaps(
 func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath string) error {
 	wp := newWorkerPool[media.File](len(mediaMaps.SourceMap) + len(mediaMaps.DestMap))
 
-	wp.start(ctx, func(file media.File) error {
-		_, err := file.GetDestinationPath(dstPath)
-		return err
-	})
-
-	go func() {
-		defer wp.stop()
-		for _, file := range mediaMaps.SourceMap {
+	for _, file := range mediaMaps.SourceMap {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+			wp.enqueue(file)
+		}
+	}
+	for _, files := range mediaMaps.DestMap {
+		for _, file := range files {
 			select {
 			case <-ctx.Done():
-				return
+				return nil
 			default:
 				wp.enqueue(file)
 			}
 		}
-		for _, files := range mediaMaps.DestMap {
-			for _, file := range files {
-				select {
-				case <-ctx.Done():
-					return
-				default:
-					wp.enqueue(file)
-				}
-			}
-		}
-	}()
+	}
+
+	fmt.Printf("  calculating destinations for %d files\n", wp.totalJobs.Load())
+
+	wp.start(ctx, func(file media.File) error {
+		_, err := file.GetDestinationPath(dstPath)
+		return err
+	})
+	go wp.stop(nil)
 
 	for {
 		select {
@@ -173,57 +250,78 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 }
 
 func scanFiles(ctx context.Context, dirPath string, filter []string, noSooc bool) ([]media.File, error) {
-	wp := newWorkerPool[string](100)
 	resultsChan := make(chan media.File, 100)
 	var results []media.File
 
-	wp.start(ctx, func(path string) error {
-		m, err := processFile(path, noSooc)
+	wp := newWorkerPool[string](100)
+
+	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
+		if info.IsDir() {
+			return nil
+		}
+
+		ext := strings.ToLower(filepath.Ext(path))
+		filetype := strings.TrimPrefix(ext, ".")
+		if !slices.Contains(filter, filetype) {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return context.Canceled
+		default:
+			wp.enqueue(path)
+		}
+
+		return nil
+	})
+	if err != nil {
+		select {
+		case wp.errorChan <- err:
+		default:
+		}
+	}
+
+	fmt.Printf("  scanning %s: %d files\n", dirPath, wp.totalJobs.Load())
+
+	wp.start(ctx, func(path string) error {
+		ext := strings.ToLower(filepath.Ext(path))
+		filetype := strings.TrimPrefix(ext, ".")
+
+		var m media.File
+		switch media.MediaType(filetype) {
+		case media.JpgMedia:
+			m = media.NewJpg(path, noSooc)
+		case media.RafMedia:
+			m = media.NewRaf(path)
+		case media.MovMedia:
+			m = media.NewMov(path)
+		default:
+			return fmt.Errorf("unsupported media type: %s", path)
+		}
+
+		hash, err := partialHash(path)
+		if err != nil {
+			return fmt.Errorf("error calculating partial hash for %s: %w", path, err)
+		}
+
+		m.SetFingerprint(hash)
+
 		select {
 		case resultsChan <- m:
 		case <-ctx.Done():
 			return context.Canceled
 		}
+
 		return nil
 	})
 
-	go func() {
-		defer wp.stop()
-		err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
-				return nil
-			}
-			ext := strings.ToLower(filepath.Ext(path))
-			filetype := strings.TrimPrefix(ext, ".")
-			if !slices.Contains(filter, filetype) {
-				return nil
-			}
-			select {
-			case <-ctx.Done():
-				return context.Canceled
-			default:
-				wp.enqueue(path)
-			}
-			return nil
-		})
-		if err != nil {
-			select {
-			case wp.errorChan <- err:
-			default:
-			}
-		}
-	}()
-
-	go func() {
-		wp.wg.Wait()
+	go wp.stop(func() {
 		close(resultsChan)
-	}()
+	})
 
 	for {
 		select {
@@ -241,31 +339,6 @@ func scanFiles(ctx context.Context, dirPath string, filter []string, noSooc bool
 			results = append(results, m)
 		}
 	}
-}
-
-func processFile(path string, noSooc bool) (media.File, error) {
-	ext := strings.ToLower(filepath.Ext(path))
-	filetype := strings.TrimPrefix(ext, ".")
-
-	var m media.File
-	switch media.MediaType(filetype) {
-	case media.JpgMedia:
-		m = media.NewJpg(path, noSooc)
-	case media.RafMedia:
-		m = media.NewRaf(path)
-	case media.MovMedia:
-		m = media.NewMov(path)
-	default:
-		return nil, fmt.Errorf("unsupported media type: %s", path)
-	}
-
-	hash, err := partialHash(path)
-	if err != nil {
-		return nil, fmt.Errorf("error calculating partial hash for %s: %w", path, err)
-	}
-
-	m.SetFingerprint(hash)
-	return m, nil
 }
 
 func calculateChunkSize(fileSize int64) int64 {
