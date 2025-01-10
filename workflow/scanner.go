@@ -36,7 +36,7 @@ func newWorkerPool[T any](jobBufferSize int) *workerPool[T] {
 	return &workerPool[T]{
 		jobs:         make(chan T, jobBufferSize),
 		errorChan:    make(chan error, 1), // Buffer of 1 to ensure non-blocking
-		progressChan: make(chan progressReport),
+		progressChan: make(chan progressReport, 100),
 	}
 }
 
@@ -88,14 +88,12 @@ func (wp *workerPool[T]) startProgressReporter(ctx context.Context) {
 			}
 
 			if progress.Total == 0 {
-				return
+				continue
 			}
 
 			currentPercentage := (float64(progress.Processed) / float64(progress.Total)) * 100
-
 			if currentPercentage >= lastReportedPercentage+progressStep || currentPercentage == 100 {
 				fmt.Printf("    Processed %d/%d files (%.0f%%)\n", progress.Processed, progress.Total, currentPercentage)
-
 				lastReportedPercentage = currentPercentage - math.Mod(currentPercentage, progressStep)
 			}
 
@@ -107,18 +105,15 @@ func (wp *workerPool[T]) startProgressReporter(ctx context.Context) {
 }
 
 func (wp *workerPool[T]) sendProgress() {
-	select {
-	case wp.progressChan <- progressReport{
+	progress := progressReport{
 		Processed: wp.processedJobs.Load(),
 		Total:     wp.totalJobs.Load(),
-	}:
-	default:
 	}
+	wp.progressChan <- progress
 }
 
 func (wp *workerPool[T]) stop(optionalFunc func()) {
 	close(wp.jobs)
-
 	wp.workerWG.Wait()
 
 	wp.sendProgress()
