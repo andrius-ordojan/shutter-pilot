@@ -88,7 +88,7 @@ func (wp *workerPool[T]) startProgressReporter(ctx context.Context) {
 			}
 
 			if progress.Total == 0 {
-				continue
+				return
 			}
 
 			currentPercentage := (float64(progress.Processed) / float64(progress.Total)) * 100
