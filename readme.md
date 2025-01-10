@@ -30,7 +30,6 @@ Setting `dryrun` will not run any changes on the file system.
 
 ## TODO
 
-- [ ] add progress bar to scanning
 - [ ] rewrite the github page summery and the readme
 - [ ] release new version
 - [ ] post on reddit
