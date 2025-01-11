@@ -93,7 +93,7 @@ func (wp *workerPool[T]) startProgressReporter(ctx context.Context) {
 
 			currentPercentage := (float64(progress.Processed) / float64(progress.Total)) * 100
 			if currentPercentage >= lastReportedPercentage+progressStep || currentPercentage == 100 {
-				fmt.Printf("    Processed %d/%d files (%.0f%%)\n", progress.Processed, progress.Total, currentPercentage)
+				fmt.Printf("  Processed %d/%d files (%.0f%%)\n", progress.Processed, progress.Total, currentPercentage)
 				lastReportedPercentage = currentPercentage - math.Mod(currentPercentage, progressStep)
 			}
 
@@ -130,7 +130,6 @@ func (wp *workerPool[T]) stop(optionalFunc func()) {
 func (wp *workerPool[T]) enqueue(job T) {
 	wp.jobs <- job
 	wp.totalJobs.Add(1)
-	wp.sendProgress()
 }
 
 func (wp *workerPool[T]) errors() <-chan error {
@@ -211,7 +210,7 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 	for _, file := range mediaMaps.SourceMap {
 		select {
 		case <-ctx.Done():
-			return nil
+			return context.Canceled
 		default:
 			wp.enqueue(file)
 		}
@@ -220,14 +219,14 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 		for _, file := range files {
 			select {
 			case <-ctx.Done():
-				return nil
+				return context.Canceled
 			default:
 				wp.enqueue(file)
 			}
 		}
 	}
 
-	fmt.Printf("  calculating destinations for %d files\n", wp.totalJobs.Load())
+	fmt.Printf("calculating destinations for %d files\n", wp.totalJobs.Load())
 
 	wp.start(ctx, func(file media.File) error {
 		_, err := file.GetDestinationPath(dstPath)
@@ -249,42 +248,52 @@ func computeDestinationPaths(ctx context.Context, mediaMaps *MediaMaps, dstPath 
 }
 
 func scanFiles(ctx context.Context, dirPath string, filter []string, noSooc bool) ([]media.File, error) {
-	resultsChan := make(chan media.File, 100)
+	resultsChan := make(chan media.File, 200)
 	var results []media.File
 
-	wp := newWorkerPool[string](100)
-
+	var paths []string
 	err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-
-		ext := strings.ToLower(filepath.Ext(path))
-		filetype := strings.TrimPrefix(ext, ".")
-		if !slices.Contains(filter, filetype) {
-			return nil
-		}
-
 		select {
 		case <-ctx.Done():
 			return context.Canceled
 		default:
-			wp.enqueue(path)
-		}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if err != nil {
+				return err
+			}
+			if info.IsDir() {
+				return nil
+			}
 
-		return nil
+			ext := strings.ToLower(filepath.Ext(path))
+			filetype := strings.TrimPrefix(ext, ".")
+			if !slices.Contains(filter, filetype) {
+				return nil
+			}
+
+			paths = append(paths, path)
+
+			return nil
+		}
 	})
 	if err != nil {
+		return []media.File{}, err
+	}
+
+	wp := newWorkerPool[string](len(paths))
+
+	for _, p := range paths {
 		select {
-		case wp.errorChan <- err:
+		case <-ctx.Done():
+			return []media.File{}, context.Canceled
 		default:
+			wp.enqueue(p)
 		}
 	}
 
-	fmt.Printf("  scanning %s: %d files\n", dirPath, wp.totalJobs.Load())
+	fmt.Printf("scanning %s: %d files\n", dirPath, wp.totalJobs.Load())
 
 	wp.start(ctx, func(path string) error {
 		ext := strings.ToLower(filepath.Ext(path))
