@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -59,6 +60,7 @@ func (p *Plan) handleSourceFiles(mediaMaps *MediaMaps, moveMode bool, destinatio
 
 func (p *Plan) Apply(ctx context.Context) error {
 	fmt.Println("Applying plan:")
+	var builder strings.Builder
 
 	for _, a := range p.actions {
 		if a.aType == conflict {
@@ -77,11 +79,11 @@ func (p *Plan) Apply(ctx context.Context) error {
 				return err
 			}
 
-			fmt.Printf("  %s\n", result)
+			builder.WriteString(fmt.Sprintf("  %s\n", result))
 		}
 	}
+	fmt.Print(builder.String())
 
-	fmt.Printf("\n")
 	return nil
 }
 
@@ -90,10 +92,10 @@ func (p *Plan) printSummary() error {
 	copyCount := 0
 	skipCount := 0
 	conflictCount := 0
-	var skippedSummeries string
-	var copySummeries string
-	var moveSummeries string
-	var conflictSummeries string
+	var skippedSummeries strings.Builder
+	var copySummeries strings.Builder
+	var moveSummeries strings.Builder
+	var conflictSummeries strings.Builder
 
 	fmt.Println("Detailed Actions:")
 	for _, action := range p.actions {
@@ -101,23 +103,23 @@ func (p *Plan) printSummary() error {
 
 		switch action.aType {
 		case move:
-			moveSummeries += fmt.Sprintf("  %s\n", summery)
+			moveSummeries.WriteString(fmt.Sprintf("  %s\n", summery))
 			moveCount++
 		case copy:
-			copySummeries += fmt.Sprintf("  %s\n", summery)
+			copySummeries.WriteString(fmt.Sprintf("  %s\n", summery))
 			copyCount++
 		case skip:
-			skippedSummeries += fmt.Sprintf("  %s\n", summery)
+			skippedSummeries.WriteString(fmt.Sprintf("  %s\n", summery))
 			skipCount++
 		case conflict:
-			conflictSummeries += fmt.Sprintf("  %s\n", summery)
+			conflictSummeries.WriteString(fmt.Sprintf("  %s\n", summery))
 			conflictCount++
 		}
 	}
-	fmt.Print(skippedSummeries)
-	fmt.Print(copySummeries)
-	fmt.Print(moveSummeries)
-	fmt.Print(conflictSummeries)
+	fmt.Print(skippedSummeries.String())
+	fmt.Print(copySummeries.String())
+	fmt.Print(moveSummeries.String())
+	fmt.Print(conflictSummeries.String())
 
 	fmt.Printf("\n")
 	fmt.Printf("Plan Summary:\n")
