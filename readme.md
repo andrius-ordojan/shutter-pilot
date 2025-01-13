@@ -64,93 +64,138 @@ The resulting file structure looks like this
 - **Customizable File Placement**  
   Provides options to exclude or include "sooc" subfolders for JPG files.
 
-## installation
+## Installation
 
-### download binary
+Shutter-Pilot can be installed in two ways: by downloading a prebuilt binary or building it from source. Follow the instructions below to get started.
 
-Go to the releases page and download the binary for your system.
+---
 
-Place the binary in your PATH.
+### Option 1: download binary
 
-### build from source
+1. Go to the [Releases Page](https://github.com/andrius-ordojan/shutter-pilot/releases).
+2. Download the binary for your operating system.
+3. Place the binary in a directory listed in your `PATH`.
+4. Verify the installation by running the command.
+
+```bash
+shutter-pilot --help
+```
+
+### Option 2: build from source
 
 Use go install to build and install the binary
+
+1. Ensure you have go installed on your system.
+2. Use go install to build and install the binary.
 
 ```bash
 go install github.com/andrius-ordojan/shutter-pilot@main
 ```
 
-This will install the binary in your go bin directory. Make sure it's in your PATH.
+3. Make sure the go bin directory is in your PATH.
 
-## usage
+```bash
+export PATH=$PATH:$(go env GOPATH)/bin
+
+```
+
+4. Verify the installation by running the command.
+
+```bash
+shutter-pilot --help
+```
+
+## Usage
 
 ```
 Compares media files in source directories with destination directory and organises them
 Usage: shutter-pilot [--filter FILTER] [--move] [--dryrun] [--nosooc] SOURCES DESTINATION
 
 Positional arguments:
-  SOURCES                source directories for media. Provide as a comma-separated list, e.g., /path/1,/path2/
-  DESTINATION            destination directory for orginised media
+SOURCES source directories for media. Provide as a comma-separated list, e.g., /path/1,/path2/
+DESTINATION destination directory for orginised media
 
 Options:
-  --filter FILTER, -f FILTER
-                         Filter by file types (allowed: jpg, raf, mov). Provide as a comma-separated list, e.g., -f jpg,mov
-  --move, -m             moves files instead of copying [default: false]
-  --dryrun, -d           does not modify file system [default: false]
-  --nosooc, -s           Does no place jpg photos under sooc directory, but next to raw files [default: false]
-  --help, -h             display this help and exit
+--filter FILTER, -f FILTER
+Filter by file types (allowed: jpg, raf, mov). Provide as a comma-separated list, e.g., -f jpg,mov
+--move, -m moves files instead of copying [default: false]
+--dryrun, -d does not modify file system [default: false]
+--nosooc, -s Does no place jpg photos under sooc directory, but next to raw files [default: false]
+--help, -h display this help and exit
+
 ```
 
-## examples
+## Examples
 
-Compare source and destination directories. Copy the missing files to the destination directory and organize them.
+#### Basic Usage
+
+Compare source and destination directories. Copy the missing files to the destination directory and organize them:
 
 ```bash
 shutter-pilot /path/to/source /path/to/destination
 ```
 
-Use multiple source directories
+#### Multiple Source Directories
+
+Provide multiple source directories as a comma-separated list:
 
 ```bash
 shutter-pilot /path/to/source1,/path/to/source2 /path/to/destination
 ```
 
-Do not apply changes to the file system. Only show what would be done.
+#### Dry Run Mode
+
+Preview changes without making any modifications:
 
 ```bash
 shutter-pilot --dryrun /path/to/source /path/to/destination
 ```
 
-Only handle jpg files and don't use the dedicated sooc subfolder. This will place jpg files under the date folder.
+#### Filter by File Types
+
+Handle only JPG files and avoid using the "sooc" subdirectory. This will place jpg files under the date folder:
 
 ```bash
 shutter-pilot --filter jpg --nosooc /path/to/source /path/to/destination
 ```
 
-Filter multiple file types
+#### Filter Multiple File Types
+
+Specify multiple file types to process:
 
 ```bash
 shutter-pilot --filter jpg,raf /path/to/source /path/to/destination
 ```
 
-## file conflicts
+### File conflicts
 
-If the destination folder contains duplicate files. Meaning they generate the exact same hash. It will result in a conflict. Duplicates can be addressed in multiple ways. For example renaming the file, skipping the file. Instead of making these decisions for you, the tool will list the conflicts and will not proceed to execute. You have to address these conflicts manually and rerun the tool.
+If duplicate files are found in the destination directory (based on hash), Shutter-Pilot will stop and report the conflicts. These must be resolved manually before proceeding. The tool does not make decisions on how to handle these situations.
 
-## how it works
+## How it works
 
-File comparison is based on hashing file content (fingerprinting). To optimize performance for large files (e.g., MOV), the tool hashes only the first and last segments of the file (1–10 MB based on file size). Sorting relies on EXIF metadata for photos and manually extracted metadata for MOV files. This ensures accurate organization by creation date.
+Shutter-Pilot uses a combination of file hashing and metadata extraction to compare, organize, and sort media files effectively.
 
-Determining if a file is a duplicate is done by hashing the file contents. It's called a fingerprint inside the application. If the hash is the same, the files are considered duplicates. Hashing is done on only a part of a file. Since the tool supports MOV files and they can easily be 10G hashing the whole file is not practical even though it provides the most certainty. The tool will hash the first and last N MB of the file. This should be enough to determine if the files are the same. The amount of megabytes to use is determined by the size of the file. Minimum being 1 MB and maximum 10 MB. The only time I see this approach causing issues is if photos were taken in a studio setting with exactly the same lighting setup at a really high capture rate.
+### File Comparison
 
-The metadata of a media file is in the beginning of the file so hashing the start and end of the file would include the metadata as well. This makes it not necessary to add parameters to the fingerprinting process.
+To determine if files are duplicates, Shutter-Pilot computes a **fingerprint** of each file by hashing its content. This approach ensures accuracy regardless of filenames or metadata. Since large files (like MOV) can be gigabytes in size, hashing is optimized as follows:
 
-To determine the sorting of the files the tool will read the metadata. This is done by reading the EXIF data from jpg and raf files. For mov files, the metadata is extracted manually. The tool will sort the files by the creation date of the media.
+- **Partial Hashing**: Only the first and last segments of the file (1–10 MB) are hashed.
+- **Dynamic Segment Size**: The size of each segment is proportional to the file size, with a minimum of 1 MB and a maximum of 10 MB.
 
-## testing
+This method balances performance and accuracy, ensuring that even large media files can be processed efficiently. The only edge case might occur when identical files are captured under studio conditions with identical metadata and content.
 
-For testing a black box approach was taken. To reduce the amount of testing code needed the tests describe the behaviors that the application needs to fulfill.
+### File Organization
 
-## TODO
+To determine the sorting of the files the tool will read the metadata. This is done by reading the EXIF data from JPG and RAF files. For MOV files, the metadata is extracted manually. The tool will sort the files by the creation date of the media.
 
-- add compare-only mode that would not move the files, but could be used to just validate that both directories contain the same data
+### Stateless Operation
+
+Each run is independent, with no reliance on external databases or persistent state.
+
+## Testing
+
+Shutter-Pilot uses a black box testing approach to verify its functionality from an end-user perspective. This ensures all core features behave as expected.
+
+## To do
+
+- Add a "compare-only" mode to validate that source and destination directories contain the same data without moving files.
