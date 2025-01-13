@@ -68,8 +68,6 @@ The resulting file structure looks like this
 
 Shutter-Pilot can be installed in two ways: by downloading a prebuilt binary or building it from source. Follow the instructions below to get started.
 
----
-
 ### Option 1: download binary
 
 1. Go to the [Releases Page](https://github.com/andrius-ordojan/shutter-pilot/releases).
