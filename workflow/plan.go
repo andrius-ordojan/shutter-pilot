@@ -89,6 +89,10 @@ func (p *Plan) Apply(ctx context.Context) error {
 		}
 	}
 
+	if builder.Len() > 0 {
+		fmt.Print(builder.String())
+	}
+
 	return nil
 }
 
