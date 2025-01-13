@@ -61,6 +61,7 @@ func (p *Plan) handleSourceFiles(mediaMaps *MediaMaps, moveMode bool, destinatio
 func (p *Plan) Apply(ctx context.Context) error {
 	fmt.Println("Applying plan:")
 	var builder strings.Builder
+	excutedActionCount := 0
 
 	for _, a := range p.actions {
 		if a.aType == conflict {
@@ -75,14 +76,18 @@ func (p *Plan) Apply(ctx context.Context) error {
 			return ctx.Err()
 		default:
 			result, err := action.execute()
+			excutedActionCount++
 			if err != nil {
 				return err
 			}
-
 			builder.WriteString(fmt.Sprintf("  %s\n", result))
+
+			if excutedActionCount > 100 {
+				fmt.Print(builder.String())
+				builder.Reset()
+			}
 		}
 	}
-	fmt.Print(builder.String())
 
 	return nil
 }
