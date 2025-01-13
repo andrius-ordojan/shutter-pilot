@@ -24,7 +24,7 @@ type args struct {
 }
 
 func (args) Description() string {
-	return "Orginizes photo and video media into lightroom style directory structure"
+	return "Compares media files in source directories with destination directory and organises them"
 }
 
 func isValidFileType(ft string) bool {
