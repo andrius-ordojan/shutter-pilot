@@ -7,15 +7,15 @@ all: build-linux build-windows build-darwin
 
 .PHONY: build-linux
 build-linux:
-	GOOS=linux GOARCH=$(ARCH) go build -o $(OUTPUT_DIR)/linux/shutter-pilot .
+	GOOS=linux GOARCH=$(ARCH) go build -o $(OUTPUT_DIR)/shutter-pilot-linux .
 
 .PHONY: build-windows
 build-windows:
-	GOOS=windows GOARCH=$(ARCH) go build -o $(OUTPUT_DIR)/win/shutter-pilot.exe .
+	GOOS=windows GOARCH=$(ARCH) go build -o $(OUTPUT_DIR)/shutter-pilot-win.exe .
 
 .PHONY: build-darwin
 build-darwin:
-	GOOS=darwin GOARCH=$(ARCH) go build -o $(OUTPUT_DIR)/darwin/shutter-pilot .
+	GOOS=darwin GOARCH=$(ARCH) go build -o $(OUTPUT_DIR)/shutter-pilot-darwin .
 
 .PHONY: clean
 clean:
