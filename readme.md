@@ -1,8 +1,6 @@
 # shutter-pilot
 
-shutter-pilot is able to compare media files between source and destination as well as organize them into a structure that is easier to browse and explore. Comparison is done using hashing of the file contents this makes it not reliant on filename or the metadata to determine a match.
-
-I'm always hesitant to format an SD card fearing that I didn't copy over the media to local drive. Cameras also don't use the most human readable format so it's difficult to judge if I already copied some files or not. So I made this application to give me ease. While at it I also made it read the metadata and sort files by creation date. Similar to how Lightroom does it.
+Shutter-Pilot is a lightweight, stateless CLI tool that helps photographers manage and organize their media files with confidence. By comparing source and destination directories using content-based hashing, it ensures no files are missed or duplicated. It also organizes media into a date-based folder structure, inspired by Lightroom.
 
 The resulting file structure looks like this
 
@@ -37,17 +35,34 @@ The resulting file structure looks like this
 
 ---
 
-## FEATURES
+## Features
 
-- stateless. There is no local database for persisting state. Every run is independent.
-- compares files using hash of the file contents
-- organize files into a structure that is easier to browse
-- supports JPG, RAF, MOV media files
-- reads all files in directory and subdirectories
-- dry run mode
-- finds file conflicts
-- can handle multiple source directories
-- can filter files by type
+- **Stateless**  
+  Every run is independent no database or persistent state is required.
+
+- **Content-Based Comparison**  
+  Compares files by hashing their content, ensuring accuracy regardless of filename.
+
+- **Organized File Structure**  
+  Automatically organizes media into an easy-to-browse, date-based directory structure inspired by Lightroom.
+
+- **Multiple Media Formats Supported**  
+  Works seamlessly with JPG, RAF, and MOV files, with metadata extraction tailored for each format.
+
+- **Recursive Directory Scanning**  
+  Reads all files in a directory and its subdirectories.
+
+- **Dry Run Mode**  
+  Preview changes without modifying the file system.
+
+- **Conflict Detection**  
+  Identifies duplicate files based on their hashes and flags conflicts for manual resolution.
+
+- **Flexible Input Handling**  
+  Supports multiple source directories and allows filtering by file types (e.g., JPG, RAF, MOV).
+
+- **Customizable File Placement**  
+  Provides options to exclude or include "sooc" subfolders for JPG files.
 
 ## installation
 
@@ -124,6 +139,8 @@ If the destination folder contains duplicate files. Meaning they generate the ex
 
 ## how it works
 
+File comparison is based on hashing file content (fingerprinting). To optimize performance for large files (e.g., MOV), the tool hashes only the first and last segments of the file (1–10 MB based on file size). Sorting relies on EXIF metadata for photos and manually extracted metadata for MOV files. This ensures accurate organization by creation date.
+
 Determining if a file is a duplicate is done by hashing the file contents. It's called a fingerprint inside the application. If the hash is the same, the files are considered duplicates. Hashing is done on only a part of a file. Since the tool supports MOV files and they can easily be 10G hashing the whole file is not practical even though it provides the most certainty. The tool will hash the first and last N MB of the file. This should be enough to determine if the files are the same. The amount of megabytes to use is determined by the size of the file. Minimum being 1 MB and maximum 10 MB. The only time I see this approach causing issues is if photos were taken in a studio setting with exactly the same lighting setup at a really high capture rate.
 
 The metadata of a media file is in the beginning of the file so hashing the start and end of the file would include the metadata as well. This makes it not necessary to add parameters to the fingerprinting process.
@@ -137,15 +154,3 @@ For testing a black box approach was taken. To reduce the amount of testing code
 ## TODO
 
 - add compare-only mode that would not move the files, but could be used to just validate that both directories contain the same data
-
-```
-
-```
-
-```
-
-```
-
-```
-
-```
