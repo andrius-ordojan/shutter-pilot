@@ -130,7 +130,9 @@ The metadata of a media file is in the beginning of the file so hashing the star
 
 To determine the sorting of the files the tool will read the metadata. This is done by reading the EXIF data from jpg and raf files. For mov files, the metadata is extracted manually. The tool will sort the files by the creation date of the media.
 
----
+## testing
+
+For testing a black box approach was taken. To reduce the amount of testing code needed the tests describe the behaviors that the application needs to fulfill.
 
 ## TODO
 
